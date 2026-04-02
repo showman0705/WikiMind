@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WikiMind — 개인 지식 베이스</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="wikimind.css">
+</head>
+<body class="view-split">
+
+<!-- ══════════════ LOADING ══════════════ -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <div style="font-size:12px;color:var(--text3)">로딩 중...</div>
+</div>
+
+<!-- ══════════════ AUTH PAGE ══════════════ -->
+<div id="authPage">
+  <div class="auth-card">
+    <div class="auth-logo">Wiki<span>Mind</span></div>
+    <div class="auth-subtitle">계속하려면 로그인하세요</div>
+    <span id="authTitle"></span>
+
+    <!-- 소셜 로그인 -->
+    <div class="auth-social" id="authSocial">
+      <button class="social-btn" onclick="handleSocialLogin(googleProvider)">
+        <span class="si" style="font-weight:700;color:#4285F4">G</span>
+        Google로 계속하기
+      </button>
+      <button class="social-btn" onclick="handleSocialLogin(githubProvider)">
+        <span class="si">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+        </span>
+        GitHub로 계속하기
+      </button>
+    </div>
+
+    <!-- 구분선 -->
+    <div class="auth-divider" id="authDivider"><span>또는 이메일로</span></div>
+
+    <!-- 이름 (회원가입만) -->
+    <div class="auth-form-group" id="authNameWrap" style="display:none">
+      <input class="auth-input" id="authName" type="text" placeholder="이름">
+    </div>
+
+    <!-- 이메일 -->
+    <div class="auth-form-group">
+      <input class="auth-input" id="authEmail" type="email" placeholder="이메일"
+        onkeydown="if(event.key==='Enter')document.getElementById('authSubmitBtn').click()">
+    </div>
+
+    <!-- 비밀번호 -->
+    <div class="auth-form-group" id="authPasswordWrap">
+      <input class="auth-input" id="authPassword" type="password" placeholder="비밀번호"
+        onkeydown="if(event.key==='Enter')document.getElementById('authSubmitBtn').click()">
+    </div>
+
+    <!-- 메시지 -->
+    <div id="authError" class="auth-msg"></div>
+
+    <!-- 제출 -->
+    <button class="auth-submit" id="authSubmitBtn">로그인</button>
+
+    <!-- 하단 링크 -->
+    <div id="authFooter">
+      <span class="auth-link" onclick="setAuthMode('signup')">회원가입</span>
+      <span class="auth-link" onclick="setAuthMode('reset')">비밀번호 찾기</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ VERIFY PAGE ══════════════ -->
+<div id="verifyPage">
+  <div class="verify-card">
+    <span class="verify-icon">📬</span>
+    <div class="verify-title">이메일을 확인해주세요</div>
+    <p class="verify-desc">아래 주소로 인증 메일을 보냈습니다.</p>
+    <span class="verify-email" id="verifyEmail"></span>
+    <p class="verify-hint">
+      메일함에서 <strong style="color:var(--text)">WikiMind 인증 링크</strong>를 클릭하면<br>
+      자동으로 앱이 열립니다. 스팸 폴더도 확인해보세요.
+    </p>
+    <div class="verify-actions">
+      <button id="resendBtn" onclick="handleResendVerification()">인증 메일 재발송</button>
+      <button class="verify-signout" onclick="handleVerifySignOut()">다른 계정으로 로그인</button>
+    </div>
+    <div class="verify-polling">
+      <span class="polling-dot"></span>
+      <span class="polling-dot"></span>
+      <span class="polling-dot"></span>
+      인증 완료 확인 중...
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ APP PAGE ══════════════ -->
+<div id="appPage">
+
+  <!-- HEADER -->
+  <header>
+    <button class="hamburger-btn" id="leftMenuBtn" onclick="toggleLeftSidebar()" style="display:none; background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; margin-right:8px; line-height:1;">☰</button>
+    <div class="logo">Wiki<span>Mind</span></div>
+
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="문서 검색...">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn" style="padding:4px 8px; font-size:14px; margin-right:4px;" id="hdrBtn-calendar" onclick="toggleRightSidebar()" title="달력 켜기/끄기">📅</button>
+      <button class="btn" onclick="exportDoc()">내보내기</button>
+      <button class="btn btn-primary" onclick="openNewDocModal()">+ 새 문서</button>
+      <div id="userMenuWrap"></div>
+    </div>
+  </header>
+
+  <!-- BODY -->
+  <div class="app-body">
+
+    <!-- SIDEBAR -->
+    <aside>
+      <div class="sidebar-top">
+        <button class="new-doc-btn" onclick="openNewDocModal()">＋ 새 문서 만들기</button>
+      </div>
+
+      <!-- 문서 섹션 헤더 (기능 1: 폴더 추가 버튼) -->
+      <div class="sidebar-section">
+        <span>문서</span>
+        <button class="sidebar-section-btn" onclick="openNewFolderModal()" title="새 폴더 추가">＋</button>
+      </div>
+      <div class="doc-tree" id="docTree"></div>
+
+      <!-- 태그 -->
+      <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
+        <span>태그</span>
+      </div>
+      <div class="tag-list" id="tagList"></div>
+    </aside>
+
+    <!-- EDITOR AREA -->
+    <div class="editor-area" id="editorArea">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📖</div>
+        <div class="empty-text">문서를 선택하거나 새로 만들어보세요</div>
+        <div class="empty-sub">사이드바에서 문서를 선택하거나 + 새 문서를 클릭하세요</div>
+      </div>
+
+      <div id="editorWrapper" style="display:none">
+
+        <!-- DOC HEADER -->
+        <div class="doc-header">
+          <input type="text" class="doc-title-input" id="docTitle" placeholder="제목 없는 문서">
+          <div class="doc-meta">
+            <span class="doc-date" id="docDate"></span>
+            <div class="tag-input-wrap" id="tagInputWrap"></div>
+          </div>
+        </div>
+
+        <!-- TOOLBAR -->
+        <div class="toolbar">
+          <button class="toolbar-btn" onclick="insertMd('**','**')" style="font-weight:700" title="굵게">B</button>
+          <button class="toolbar-btn" onclick="insertMd('*','*')"   style="font-style:italic" title="기울임">I</button>
+          <button class="toolbar-btn" onclick="insertMd('~~','~~')" style="text-decoration:line-through" title="취소선">S</button>
+          <button class="toolbar-btn" onclick="insertMd('\`','\`')" title="인라인 코드">{ }</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="insertLine('# ')"  title="제목 1">H1</button>
+          <button class="toolbar-btn" onclick="insertLine('## ')" title="제목 2">H2</button>
+          <button class="toolbar-btn" onclick="insertLine('### ')" title="제목 3">H3</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="insertLine('- ')"      title="목록">•</button>
+          <button class="toolbar-btn" onclick="insertLine('1. ')"     title="번호 목록">1.</button>
+          <button class="toolbar-btn" onclick="insertLine('- [ ] ')"  title="체크박스">☐</button>
+          <button class="toolbar-btn" onclick="insertLine('> ')"      title="인용">❝</button>
+          <button class="toolbar-btn" onclick="insertLine('---')"     title="구분선">—</button>
+          <button class="toolbar-btn" onclick="insertWikiLink()"      title="위키 링크">[[]]</button>
+          <div class="toolbar-sep"></div>
+          <!-- 기능 5: 이미지/파일 버튼 -->
+          <button class="toolbar-btn" onclick="insertImageFromToolbar()" title="이미지 삽입">🖼</button>
+          <button class="toolbar-btn" onclick="insertFileFromToolbar()"  title="파일 첨부">📎</button>
+          <div class="view-toggle">
+            <button class="view-btn" id="vBtn-edit"    onclick="setView('edit')">편집</button>
+            <button class="view-btn active" id="vBtn-split"   onclick="setView('split')">분할</button>
+            <button class="view-btn" id="vBtn-preview" onclick="setView('preview')">미리보기</button>
+          </div>
+        </div>
+
+        <!-- EDITOR / PREVIEW -->
+        <div class="editor-main">
+          <div class="editor-pane">
+            <textarea id="editor" placeholder="마크다운으로 작성하세요...&#10;&#10;/ 를 입력하면 단축어 메뉴가 나타납니다"></textarea>
+            <!-- 기능 5: 드래그앤드롭 오버레이 -->
+            <div class="drop-overlay">🖼 이미지/파일을 여기에 놓으세요</div>
+          </div>
+          <div class="preview-pane" id="preview"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR (CALENDAR) -->
+    <aside class="right-sidebar" id="rightSidebar">
+      <div class="mc-hdr">
+        <button class="mc-nav" onclick="navMiniCal(-1)">&lt;</button>
+        <div class="mc-title" id="mcTitle">10월 2023</div>
+        <button class="mc-nav" onclick="navMiniCal(1)">&gt;</button>
+      </div>
+      <div class="mc-grid">
+        <div class="mc-dow sun">일</div><div class="mc-dow">월</div><div class="mc-dow">화</div>
+        <div class="mc-dow">수</div><div class="mc-dow">목</div><div class="mc-dow">금</div><div class="mc-dow sat">토</div>
+      </div>
+      <div class="mc-days" id="mcDays"></div>
+      
+      <div class="mc-events-section">
+        <div class="mc-events-title" id="mcEventsTitle">오늘의 일정</div>
+        <div class="mc-events-list" id="mcEventsList">
+          <div style="padding:10px 0;font-size:12px;color:var(--text3);text-align:center;">일정이 없습니다.</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <span><span class="status-dot"></span>클라우드 동기화</span>
+    <span id="wordCount">0 단어</span>
+    <span id="charCount">0 자</span>
+    <span id="docCount">0 문서</span>
+  </div>
+</div>
+
+<!-- ══════════════ SLASH MENU (기능 3) ══════════════ -->
+<div class="slash-menu" id="slashMenu"></div>
+
+<!-- ══════════════ TOAST ══════════════ -->
+<div class="saved-toast" id="savedToast">☁ 저장됨</div>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- 새 문서 모달 -->
+<div class="modal-overlay" id="newDocModal">
+  <div class="modal">
+    <h3>새 문서 만들기</h3>
+    <input type="text" id="newDocName" placeholder="문서 제목"
+      onkeydown="if(event.key==='Enter')createDoc()">
+    <select id="newDocFolder"></select>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newDocModal')">취소</button>
+      <button class="btn btn-primary" onclick="createDoc()">만들기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 새 폴더 모달 (기능 1) -->
+<div class="modal-overlay" id="newFolderModal">
+  <div class="modal">
+    <h3>새 폴더 만들기</h3>
+    <input type="text" id="newFolderName" placeholder="폴더 이름"
+      onkeydown="if(event.key==='Enter')createFolder()">
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newFolderModal')">취소</button>
+      <button class="btn btn-primary" onclick="createFolder()">만들기</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="wikimind.js"></script>
+</body>
+</html>
