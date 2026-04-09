@@ -475,10 +475,9 @@ window.openDoc = function(id) {
   const wrap = $('editorWrapper');
   wrap.style.cssText = 'display:flex;flex-direction:column;flex:1;overflow:hidden';
   $('docTitle').value = d.title;
-  $('editor').value   = d.content;
+  renderNotionEditor(d.content);
   $('docDate').textContent = formatDate(d.updatedAt);
   renderDocTags(d);
-  renderPreview();
   renderTree();
   updateStatus();
   
@@ -530,17 +529,92 @@ window.deleteDocById = function(e, id) {
 window.closeModal = function(id) { $(id).classList.remove('visible'); };
 
 // ════════════════════════════════════════════
-//  EDITOR EVENTS
+//  NOTION EDITOR — render & sync
 // ════════════════════════════════════════════
-$('editor').addEventListener('input', () => {
+function renderNotionEditor(md) {
+  const el = $('notionEditor');
+  el.innerHTML = parseMarkdown(md);
+  el.querySelectorAll('pre').forEach(pre => {
+    const code = pre.querySelector('code');
+    if (!code) return;
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn'; btn.textContent = '복사';
+    btn.onmousedown = e => e.preventDefault(); // prevent blur
+    btn.onclick = () => {
+      navigator.clipboard.writeText(code.innerText).then(() => {
+        btn.textContent = '✓ 복사됨'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 2000);
+      });
+    };
+    pre.appendChild(btn);
+  });
+}
+
+function htmlToMd(el) {
+  function ser(node) {
+    if (node.nodeType === 3) return node.textContent;
+    if (node.nodeType !== 1) return '';
+    const tag = node.tagName.toLowerCase();
+    const kids = () => Array.from(node.childNodes).map(ser).join('');
+
+    if (tag === 'b' || tag === 'strong') return `**${kids()}**`;
+    if (tag === 'i' || tag === 'em') return `*${kids()}*`;
+    if (tag === 'strike' || tag === 'del' || tag === 's') return `~~${kids()}~~`;
+    if (tag === 'code' && node.parentElement?.tagName !== 'PRE') return `\`${kids()}\``;
+    if (tag === 'pre') {
+      const code = node.querySelector('code');
+      const lang = (code?.className?.match(/lang-(\w+)/) || [])[1] || '';
+      return `\`\`\`${lang}\n${code ? code.innerText : kids()}\n\`\`\`\n`;
+    }
+    if (tag === 'a') {
+      const href = node.getAttribute('href') || '';
+      const text = kids();
+      if (node.classList.contains('wiki-link')) return `[[${text.replace(/^\[\[|\]\]$/g, '')}]]`;
+      return `[${text}](${href})`;
+    }
+    if (tag === 'img') return `![${node.getAttribute('alt')||''}](${node.getAttribute('src')||''})`;
+    if (tag === 'br') return '\n';
+    if (tag === 'hr') return '---\n';
+    if (tag === 'h1') return `# ${kids().trim()}\n`;
+    if (tag === 'h2') return `## ${kids().trim()}\n`;
+    if (tag === 'h3') return `### ${kids().trim()}\n`;
+    if (tag === 'blockquote') return `> ${kids().trim()}\n`;
+    if (tag === 'ul') {
+      return Array.from(node.children).filter(c => c.tagName === 'LI')
+        .map(li => `- ${Array.from(li.childNodes).filter(n => !/^(UL|OL)$/.test(n.nodeName)).map(ser).join('').trim()}`)
+        .join('\n') + '\n';
+    }
+    if (tag === 'ol') {
+      return Array.from(node.children).filter(c => c.tagName === 'LI')
+        .map((li, i) => `${i+1}. ${Array.from(li.childNodes).filter(n => !/^(UL|OL)$/.test(n.nodeName)).map(ser).join('').trim()}`)
+        .join('\n') + '\n';
+    }
+    if (tag === 'li') return kids();
+    if (tag === 'p' || tag === 'div') {
+      const c = kids();
+      if (!c.trim()) return '\n';
+      return c.endsWith('\n') ? c : c + '\n';
+    }
+    return kids();
+  }
+  return Array.from(el.childNodes).map(ser).join('').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function syncContent() {
   const d = state.docs.find(x => x.id == state.activeDocId);
   if (!d) return;
-  d.content   = $('editor').value;
+  d.content = htmlToMd($('notionEditor'));
   d.updatedAt = new Date().toISOString();
-  renderPreview();
   updateStatus();
   schedulePush(d);
-  handleSlashInput();
+}
+
+// ════════════════════════════════════════════
+//  EDITOR EVENTS
+// ════════════════════════════════════════════
+$('notionEditor').addEventListener('input', () => {
+  syncContent();
+  handleSlashInputCE();
 });
 
 $('docTitle').addEventListener('input', () => {
@@ -598,28 +672,6 @@ window.filterByTag = function(tag) {
   renderTree(); renderTags();
 };
 
-// ════════════════════════════════════════════
-//  MARKDOWN PREVIEW
-// ════════════════════════════════════════════
-function renderPreview() {
-  const d = state.docs.find(x => x.id == state.activeDocId);
-  if (!d) return;
-  $('preview').innerHTML = parseMarkdown(d.content);
-  // Attach copy buttons to code blocks
-  $('preview').querySelectorAll('pre').forEach(pre => {
-    const code = pre.querySelector('code');
-    if (!code) return;
-    const btn = document.createElement('button');
-    btn.className = 'copy-btn'; btn.textContent = '복사';
-    btn.onclick = () => {
-      navigator.clipboard.writeText(code.innerText).then(() => {
-        btn.textContent = '✓ 복사됨'; btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 2000);
-      });
-    };
-    pre.appendChild(btn);
-  });
-}
 
 function parseMarkdown(md) {
   // Code blocks first (기능 4: 복사 버튼은 renderPreview에서 동적으로 추가)
@@ -708,18 +760,18 @@ const SLASH_COMMANDS = [
   { icon:'📅', label:'일정 추가',   desc:'캘린더 연동 일정',        action: () => insertScheduleLine() },
 ];
 
-function handleSlashInput() {
-  const ta = $('editor');
-  const val = ta.value;
-  const pos = ta.selectionStart;
-  // Find last '/' before cursor on the same line
-  const lineStart = val.lastIndexOf('\n', pos - 1) + 1;
-  const lineText  = val.slice(lineStart, pos);
-  const slashIdx  = lineText.lastIndexOf('/');
+function handleSlashInputCE() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  const anchorNode = sel.anchorNode;
+  const offset = sel.anchorOffset;
+  const textBefore = anchorNode.nodeType === 3
+    ? anchorNode.textContent.slice(0, offset)
+    : '';
+  const slashIdx = textBefore.lastIndexOf('/');
   if (slashIdx === -1) { hideSlashMenu(); return; }
-  const query = lineText.slice(slashIdx + 1).toLowerCase();
-  // Only show if slash is the first char or preceded by space
-  const charBefore = slashIdx > 0 ? lineText[slashIdx - 1] : '';
+  const query = textBefore.slice(slashIdx + 1).toLowerCase();
+  const charBefore = slashIdx > 0 ? textBefore[slashIdx - 1] : '';
   if (charBefore && charBefore !== ' ') { hideSlashMenu(); return; }
 
   const filtered = SLASH_COMMANDS.filter(c =>
@@ -728,29 +780,29 @@ function handleSlashInput() {
   if (!filtered.length) { hideSlashMenu(); return; }
 
   state.slashVisible  = true;
-  state.slashStartPos = lineStart + slashIdx;
+  state.slashNode     = anchorNode;
+  state.slashOffset   = slashIdx;
   state.slashIdx      = 0;
-  renderSlashMenu(filtered, ta);
+  renderSlashMenuCE(filtered);
 }
 
-function renderSlashMenu(items, ta) {
+function renderSlashMenuCE(items) {
   const menu = $('slashMenu');
   menu.innerHTML = items.map((c, i) =>
-    `<div class="slash-item ${i===state.slashIdx?'selected':''}" onclick="selectSlashItem(${SLASH_COMMANDS.indexOf(c)})">
+    `<div class="slash-item ${i===state.slashIdx?'selected':''}" onmousedown="event.preventDefault()" onclick="selectSlashItem(${SLASH_COMMANDS.indexOf(c)})">
       <span class="slash-item-icon">${c.icon}</span>
       <div><div class="slash-item-label">${c.label}</div><div class="slash-item-desc">${c.desc}</div></div>
     </div>`
   ).join('');
-  // Position menu near cursor
-  const rect = ta.getBoundingClientRect();
-  menu.style.display = 'block';
-  menu.style.left    = (rect.left + 28) + 'px';
-  menu.style.top     = (rect.top + 80) + 'px';
+  const el = $('notionEditor');
+  const rect = el.getBoundingClientRect();
+  menu.style.left = (rect.left + 28) + 'px';
+  menu.style.top  = (rect.top + 80)  + 'px';
   menu.style.display = 'block';
   menu.classList.add('visible');
-  // Store filtered for keyboard use
   menu._filtered = items;
 }
+
 
 function hideSlashMenu() {
   state.slashVisible = false;
@@ -776,14 +828,21 @@ function selectSlash() {
 window.selectSlashItem = function(idx) { executeSlash(SLASH_COMMANDS[idx]); };
 
 function executeSlash(cmd) {
-  // Remove the /query text from editor
-  const ta  = $('editor');
-  const pos = ta.selectionStart;
-  ta.value  = ta.value.slice(0, state.slashStartPos) + ta.value.slice(pos);
-  ta.selectionStart = ta.selectionEnd = state.slashStartPos;
+  // Remove the /query text in contenteditable
+  if (state.slashNode && state.slashNode.nodeType === 3) {
+    const sel = window.getSelection();
+    const endOffset = sel.anchorOffset;
+    const range = document.createRange();
+    range.setStart(state.slashNode, state.slashOffset);
+    range.setEnd(state.slashNode, endOffset);
+    range.deleteContents();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    range.collapse(true);
+  }
   hideSlashMenu();
-  ta.dispatchEvent(new Event('input'));
   cmd.action();
+  syncContent();
 }
 
 // ════════════════════════════════════════════
@@ -799,30 +858,44 @@ window.triggerFileUpload = function(type) {
 
 function handleFileInsert(file) {
   if (!file) return;
-  const isImage = file.type.startsWith('image/');
-  if (isImage) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      insertAtCursor(`\n![${file.name}](${e.target.result})\n`);
-    };
-    reader.readAsDataURL(file);
-  } else {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const dataUrl = e.target.result;
-      insertAtCursor(`\n[📎 ${file.name}](${dataUrl})\n`);
-    };
-    reader.readAsDataURL(file);
-  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const el = $('notionEditor');
+    el.focus();
+    if (file.type.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = e.target.result; img.alt = file.name;
+      insertNodeAtCursor(img);
+    } else {
+      const div = document.createElement('div');
+      div.className = 'file-embed';
+      div.innerHTML = `📎 <a href="${e.target.result}" target="_blank" rel="noopener">${escHtml(file.name)}</a>`;
+      insertNodeAtCursor(div);
+    }
+    syncContent();
+  };
+  reader.readAsDataURL(file);
 }
 
-// Drag & Drop onto editor pane
-const editorPane = document.querySelector('.editor-pane');
+function insertNodeAtCursor(node) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) { $('notionEditor').appendChild(node); return; }
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// Drag & Drop
+const notionEl = $('notionEditor');
 const dropOverlay = document.querySelector('.drop-overlay');
-if (editorPane) {
-  editorPane.addEventListener('dragover', e => { e.preventDefault(); dropOverlay.classList.add('active'); });
-  editorPane.addEventListener('dragleave', () => dropOverlay.classList.remove('active'));
-  editorPane.addEventListener('drop', e => {
+if (notionEl) {
+  notionEl.addEventListener('dragover', e => { e.preventDefault(); dropOverlay.classList.add('active'); });
+  notionEl.addEventListener('dragleave', () => dropOverlay.classList.remove('active'));
+  notionEl.addEventListener('drop', e => {
     e.preventDefault(); dropOverlay.classList.remove('active');
     const file = e.dataTransfer.files[0];
     if (file) handleFileInsert(file);
@@ -830,33 +903,49 @@ if (editorPane) {
 }
 
 // ════════════════════════════════════════════
-//  TOOLBAR HELPERS
+//  TOOLBAR HELPERS (contenteditable)
 // ════════════════════════════════════════════
 function insertAtCursor(text) {
-  const ta  = $('editor');
-  const s   = ta.selectionStart;
-  ta.value  = ta.value.slice(0, s) + text + ta.value.slice(ta.selectionEnd);
-  ta.selectionStart = ta.selectionEnd = s + text.length;
-  ta.dispatchEvent(new Event('input'));
-  ta.focus();
+  const el = $('notionEditor');
+  el.focus();
+  document.execCommand('insertText', false, text);
+  syncContent();
 }
 
 window.insertMd = function(before, after) {
-  const ta = $('editor');
-  const s = ta.selectionStart, e = ta.selectionEnd;
-  const sel = ta.value.slice(s, e) || '텍스트';
-  ta.setRangeText(before + sel + after, s, e, 'select');
-  ta.dispatchEvent(new Event('input'));
-  ta.focus();
+  const el = $('notionEditor');
+  el.focus();
+  if (before === '**' && after === '**') { document.execCommand('bold'); }
+  else if (before === '*' && after === '*') { document.execCommand('italic'); }
+  else if (before === '~~' && after === '~~') { document.execCommand('strikeThrough'); }
+  else if (before === '`' && after === '`') {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const code = document.createElement('code');
+    code.textContent = range.toString() || '코드';
+    range.deleteContents();
+    range.insertNode(code);
+    range.setStartAfter(code);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  syncContent();
 };
 
 function insertLine(prefix) {
-  const ta  = $('editor');
-  const s   = ta.selectionStart;
-  const ls  = ta.value.lastIndexOf('\n', s - 1) + 1;
-  ta.setRangeText(prefix, ls, ls, 'end');
-  ta.dispatchEvent(new Event('input'));
-  ta.focus();
+  const el = $('notionEditor');
+  el.focus();
+  if (prefix === '# ')    { document.execCommand('formatBlock', false, 'h1'); }
+  else if (prefix === '## ')   { document.execCommand('formatBlock', false, 'h2'); }
+  else if (prefix === '### ')  { document.execCommand('formatBlock', false, 'h3'); }
+  else if (prefix === '- ')    { document.execCommand('insertUnorderedList'); }
+  else if (prefix === '1. ')   { document.execCommand('insertOrderedList'); }
+  else if (prefix === '- [ ] '){ document.execCommand('insertText', false, '☐ '); }
+  else if (prefix === '> ')    { document.execCommand('formatBlock', false, 'blockquote'); }
+  else if (prefix === '---')   { document.execCommand('insertHTML', false, '<hr><div><br></div>'); }
+  else { document.execCommand('insertText', false, prefix); }
+  syncContent();
 }
 window.insertLine = insertLine;
 
@@ -864,13 +953,21 @@ window.insertScheduleLine = function() {
   const id = Math.random().toString(36).substr(2, 8);
   const d = new Date();
   const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  insertLine(`📅[${id}] ${dStr} 새로운 일정`);
+  insertAtCursor(`📅[${id}] ${dStr} 새로운 일정`);
 };
 
 window.insertWikiLink = function() {
   const title = prompt('연결할 문서 제목:');
   if (!title) return;
-  insertAtCursor(`[[${title}]]`);
+  const el = $('notionEditor');
+  el.focus();
+  const a = document.createElement('a');
+  a.className = 'wiki-link';
+  a.setAttribute('href', '#');
+  a.setAttribute('onclick', `jumpOrCreateDoc('${escHtml(title)}')`);
+  a.textContent = `[[${title}]]`;
+  insertNodeAtCursor(a);
+  syncContent();
 };
 
 window.insertImageFromToolbar = function() { triggerFileUpload('image'); };
@@ -879,12 +976,7 @@ window.insertFileFromToolbar  = function() { triggerFileUpload('file'); };
 // ════════════════════════════════════════════
 //  VIEW / FOLDER TOGGLE / SEARCH / EXPORT
 // ════════════════════════════════════════════
-window.setView = function(mode) {
-  state.view = mode;
-  document.body.className = `view-${mode}`;
-  ['edit','split','preview'].forEach(m =>
-    $(`vBtn-${m}`).classList.toggle('active', m === mode));
-};
+window.setView = function() {}; // no-op — replaced by notion editor
 
 window.toggleFolder = function(el) {
   const arrow    = el.querySelector('.folder-arrow');
@@ -918,7 +1010,7 @@ searchInput.addEventListener('input', () => {
 });
 document.addEventListener('click', e => {
   if (!e.target.closest('.search-wrap')) searchResults.classList.remove('visible');
-  if (!e.target.closest('.slash-menu') && !e.target.closest('#editor')) hideSlashMenu();
+  if (!e.target.closest('.slash-menu') && !e.target.closest('#notionEditor')) hideSlashMenu();
 });
 
 window.exportDoc = function() {

@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="wikimind.css">
 </head>
-<body class="view-split">
+<body>
 
 <!-- ══════════════ LOADING ══════════════ -->
 <div id="loadingScreen">
@@ -127,14 +127,12 @@
         <button class="new-doc-btn" onclick="openNewDocModal()">＋ 새 문서 만들기</button>
       </div>
 
-      <!-- 문서 섹션 헤더 (기능 1: 폴더 추가 버튼) -->
       <div class="sidebar-section">
         <span>문서</span>
         <button class="sidebar-section-btn" onclick="openNewFolderModal()" title="새 폴더 추가">＋</button>
       </div>
       <div class="doc-tree" id="docTree"></div>
 
-      <!-- 태그 -->
       <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
         <span>태그</span>
       </div>
@@ -167,42 +165,33 @@
           <button class="toolbar-btn" onclick="insertMd('~~','~~')" style="text-decoration:line-through" title="취소선">S</button>
           <button class="toolbar-btn" onclick="insertMd('\`','\`')" title="인라인 코드">{ }</button>
           <div class="toolbar-sep"></div>
-          <button class="toolbar-btn" onclick="insertLine('# ')"  title="제목 1">H1</button>
-          <button class="toolbar-btn" onclick="insertLine('## ')" title="제목 2">H2</button>
+          <button class="toolbar-btn" onclick="insertLine('# ')"   title="제목 1">H1</button>
+          <button class="toolbar-btn" onclick="insertLine('## ')"  title="제목 2">H2</button>
           <button class="toolbar-btn" onclick="insertLine('### ')" title="제목 3">H3</button>
           <div class="toolbar-sep"></div>
-          <button class="toolbar-btn" onclick="insertLine('- ')"      title="목록">•</button>
-          <button class="toolbar-btn" onclick="insertLine('1. ')"     title="번호 목록">1.</button>
-          <button class="toolbar-btn" onclick="insertLine('- [ ] ')"  title="체크박스">☐</button>
-          <button class="toolbar-btn" onclick="insertLine('> ')"      title="인용">❝</button>
-          <button class="toolbar-btn" onclick="insertLine('---')"     title="구분선">—</button>
-          <button class="toolbar-btn" onclick="insertWikiLink()"      title="위키 링크">[[]]</button>
+          <button class="toolbar-btn" onclick="insertLine('- ')"     title="목록">•</button>
+          <button class="toolbar-btn" onclick="insertLine('1. ')"    title="번호 목록">1.</button>
+          <button class="toolbar-btn" onclick="insertLine('- [ ] ')" title="체크박스">☐</button>
+          <button class="toolbar-btn" onclick="insertLine('> ')"     title="인용">❝</button>
+          <button class="toolbar-btn" onclick="insertLine('---')"    title="구분선">—</button>
+          <button class="toolbar-btn" onclick="insertWikiLink()"     title="위키 링크">[[]]</button>
           <div class="toolbar-sep"></div>
-          <!-- 기능 5: 이미지/파일 버튼 -->
           <button class="toolbar-btn" onclick="insertImageFromToolbar()" title="이미지 삽입">🖼</button>
           <button class="toolbar-btn" onclick="insertFileFromToolbar()"  title="파일 첨부">📎</button>
-          <div class="view-toggle">
-            <button class="view-btn" id="vBtn-edit"    onclick="setView('edit')">편집</button>
-            <button class="view-btn active" id="vBtn-split"   onclick="setView('split')">분할</button>
-            <button class="view-btn" id="vBtn-preview" onclick="setView('preview')">미리보기</button>
-          </div>
         </div>
 
-        <!-- EDITOR / PREVIEW -->
+        <!-- NOTION-STYLE EDITOR -->
         <div class="editor-main">
-          <div class="editor-pane">
-            <textarea id="editor" placeholder="마크다운으로 작성하세요...&#10;&#10;/ 를 입력하면 단축어 메뉴가 나타납니다"></textarea>
-            <!-- 기능 5: 드래그앤드롭 오버레이 -->
-            <div class="drop-overlay">🖼 이미지/파일을 여기에 놓으세요</div>
-          </div>
-          <div class="preview-pane" id="preview"></div>
+          <div class="notion-editor" id="notionEditor" contenteditable="true" spellcheck="false"
+               data-placeholder="마크다운으로 작성하세요...&#10;/ 를 입력하면 단축어 메뉴가 나타납니다"></div>
+          <div class="drop-overlay">🖼 이미지/파일을 여기에 놓으세요</div>
         </div>
 
       </div>
     </div>
 
     <!-- RIGHT SIDEBAR (CALENDAR) -->
-    <aside class="right-sidebar" id="rightSidebar">
+    <aside class="right-sidebar collapsed" id="rightSidebar">
       <div class="mc-brand">
         <span class="mc-brand-logo">Wiki<span>Mind</span> Calendar</span>
       </div>
@@ -216,7 +205,7 @@
         <div class="mc-dow">수</div><div class="mc-dow">목</div><div class="mc-dow">금</div><div class="mc-dow sat">토</div>
       </div>
       <div class="mc-days" id="mcDays"></div>
-      
+
       <div class="mc-events-section">
         <div class="mc-events-title" id="mcEventsTitle">오늘의 일정</div>
         <div class="mc-events-list" id="mcEventsList">
@@ -235,7 +224,7 @@
   </div>
 </div>
 
-<!-- ══════════════ SLASH MENU (기능 3) ══════════════ -->
+<!-- ══════════════ SLASH MENU ══════════════ -->
 <div class="slash-menu" id="slashMenu"></div>
 
 <!-- ══════════════ TOAST ══════════════ -->
@@ -257,7 +246,7 @@
   </div>
 </div>
 
-<!-- 새 폴더 모달 (기능 1) -->
+<!-- 새 폴더 모달 -->
 <div class="modal-overlay" id="newFolderModal">
   <div class="modal">
     <h3>새 폴더 만들기</h3>
