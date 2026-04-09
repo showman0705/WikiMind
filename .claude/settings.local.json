@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp /tmp/calendar_css_raw.txt /c/wikimind/ver/ver02/.claude/worktrees/competent-shtern/calendar.css)",
+      "Bash(cp /tmp/calendar_js_raw.txt /c/wikimind/ver/ver02/.claude/worktrees/competent-shtern/calendar.js)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)"
+    ]
+  }
+}

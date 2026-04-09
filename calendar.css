@@ -145,6 +145,90 @@
       font-weight: 600
     }
 
+    /* ══ USER MENU ══ */
+    .user-menu {
+      position: relative;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid var(--bd2);
+      background: var(--sf2);
+      color: var(--ac);
+      font-size: .78rem;
+      font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color .15s;
+    }
+
+    .user-avatar:hover {
+      border-color: var(--ac);
+    }
+
+    .user-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: var(--sf2);
+      border: 1px solid var(--bd2);
+      border-radius: 12px;
+      min-width: 200px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      z-index: 200;
+      overflow: hidden;
+    }
+
+    .user-dropdown.open {
+      display: block;
+    }
+
+    .user-info {
+      padding: 14px 16px 12px;
+    }
+
+    .user-name {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .user-email {
+      font-size: .72rem;
+      color: var(--t2);
+      word-break: break-all;
+    }
+
+    .user-dropdown-divider {
+      height: 1px;
+      background: var(--bd);
+    }
+
+    .user-dropdown-item {
+      width: 100%;
+      padding: 11px 16px;
+      border: none;
+      background: transparent;
+      color: var(--t2);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .8rem;
+      text-align: left;
+      cursor: pointer;
+      transition: background .12s, color .12s;
+    }
+
+    .user-dropdown-item:hover {
+      background: var(--acd);
+      color: var(--ac);
+    }
+
     /* ══ VIEW WRAP ══ */
     .vwrap {
       flex: 1;

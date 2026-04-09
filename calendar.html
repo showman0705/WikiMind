@@ -111,6 +111,17 @@
           <button class="vtab on" data-v="month">월간</button>
           <button class="vtab" data-v="day">일간</button>
         </div>
+        <div class="user-menu" id="userMenu">
+          <button class="user-avatar" id="userAvatar" onclick="toggleUserMenu()"></button>
+          <div class="user-dropdown" id="userDropdown">
+            <div class="user-info">
+              <div class="user-name" id="userDisplayName"></div>
+              <div class="user-email" id="userDisplayEmail"></div>
+            </div>
+            <div class="user-dropdown-divider"></div>
+            <button class="user-dropdown-item" onclick="handleSignOut()">로그아웃</button>
+          </div>
+        </div>
       </div>
       <div class="vwrap" id="vwrap"></div>
     </div>
