@@ -22,7 +22,6 @@
     <div class="auth-subtitle">계속하려면 로그인하세요</div>
     <span id="authTitle"></span>
 
-    <!-- 소셜 로그인 -->
     <div class="auth-social" id="authSocial">
       <button class="social-btn" onclick="handleSocialLogin(googleProvider)">
         <span class="si" style="font-weight:700;color:#4285F4">G</span>
@@ -38,33 +37,23 @@
       </button>
     </div>
 
-    <!-- 구분선 -->
     <div class="auth-divider" id="authDivider"><span>또는 이메일로</span></div>
 
-    <!-- 이름 (회원가입만) -->
     <div class="auth-form-group" id="authNameWrap" style="display:none">
       <input class="auth-input" id="authName" type="text" placeholder="이름">
     </div>
-
-    <!-- 이메일 -->
     <div class="auth-form-group">
       <input class="auth-input" id="authEmail" type="email" placeholder="이메일"
         onkeydown="if(event.key==='Enter')document.getElementById('authSubmitBtn').click()">
     </div>
-
-    <!-- 비밀번호 -->
     <div class="auth-form-group" id="authPasswordWrap">
       <input class="auth-input" id="authPassword" type="password" placeholder="비밀번호"
         onkeydown="if(event.key==='Enter')document.getElementById('authSubmitBtn').click()">
     </div>
 
-    <!-- 메시지 -->
     <div id="authError" class="auth-msg"></div>
-
-    <!-- 제출 -->
     <button class="auth-submit" id="authSubmitBtn">로그인</button>
 
-    <!-- 하단 링크 -->
     <div id="authFooter">
       <span class="auth-link" onclick="setAuthMode('signup')">회원가입</span>
       <span class="auth-link" onclick="setAuthMode('reset')">비밀번호 찾기</span>
@@ -99,9 +88,9 @@
 <!-- ══════════════ APP PAGE ══════════════ -->
 <div id="appPage">
 
-  <!-- HEADER -->
   <header>
-    <button class="hamburger-btn" id="leftMenuBtn" onclick="toggleLeftSidebar()" style="display:none; background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; margin-right:8px; line-height:1;">☰</button>
+    <button class="hamburger-btn" id="leftMenuBtn" onclick="toggleLeftSidebar()"
+      style="display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;margin-right:8px;line-height:1;">☰</button>
     <div class="logo">Wiki<span>Mind</span></div>
 
     <div class="search-wrap">
@@ -111,35 +100,31 @@
     </div>
 
     <div class="header-actions">
-      <button class="btn" style="padding:4px 8px; font-size:14px; margin-right:4px;" id="hdrBtn-calendar" onclick="toggleRightSidebar()" title="달력 켜기/끄기">📅</button>
+      <button class="btn" style="padding:4px 8px;font-size:14px;margin-right:4px;"
+        id="hdrBtn-calendar" onclick="toggleRightSidebar()" title="달력 켜기/끄기">📅</button>
       <button class="btn" onclick="exportDoc()">내보내기</button>
       <button class="btn btn-primary" onclick="openNewDocModal()">+ 새 문서</button>
       <div id="userMenuWrap"></div>
     </div>
   </header>
 
-  <!-- BODY -->
   <div class="app-body">
 
-    <!-- SIDEBAR -->
     <aside>
       <div class="sidebar-top">
         <button class="new-doc-btn" onclick="openNewDocModal()">＋ 새 문서 만들기</button>
       </div>
-
       <div class="sidebar-section">
         <span>문서</span>
         <button class="sidebar-section-btn" onclick="openNewFolderModal()" title="새 폴더 추가">＋</button>
       </div>
       <div class="doc-tree" id="docTree"></div>
-
       <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
         <span>태그</span>
       </div>
       <div class="tag-list" id="tagList"></div>
     </aside>
 
-    <!-- EDITOR AREA -->
     <div class="editor-area" id="editorArea">
       <div class="empty-state" id="emptyState">
         <div class="empty-icon">📖</div>
@@ -149,7 +134,6 @@
 
       <div id="editorWrapper" style="display:none">
 
-        <!-- DOC HEADER -->
         <div class="doc-header">
           <input type="text" class="doc-title-input" id="docTitle" placeholder="제목 없는 문서">
           <div class="doc-meta">
@@ -158,7 +142,6 @@
           </div>
         </div>
 
-        <!-- TOOLBAR -->
         <div class="toolbar">
           <button class="toolbar-btn" onclick="insertMd('**','**')" style="font-weight:700" title="굵게">B</button>
           <button class="toolbar-btn" onclick="insertMd('*','*')"   style="font-style:italic" title="기울임">I</button>
@@ -180,10 +163,13 @@
           <button class="toolbar-btn" onclick="insertFileFromToolbar()"  title="파일 첨부">📎</button>
         </div>
 
-        <!-- NOTION-STYLE EDITOR -->
-        <div class="editor-main">
-          <div class="notion-editor" id="notionEditor" contenteditable="true" spellcheck="false"
-               data-placeholder="마크다운으로 작성하세요...&#10;/ 를 입력하면 단축어 메뉴가 나타납니다"></div>
+        <!-- 뷰/에디터 영역 -->
+        <div class="editor-main" id="editorMain">
+          <!-- 렌더링 뷰 (기본) -->
+          <div class="notion-view" id="notionView" onclick="switchToEdit()"></div>
+          <!-- 편집 textarea (클릭 시) -->
+          <textarea class="notion-textarea" id="notionEditor"
+            placeholder="마크다운으로 작성하세요...&#10;&#10;/ 를 입력하면 단축어 메뉴가 나타납니다"></textarea>
           <div class="drop-overlay">🖼 이미지/파일을 여기에 놓으세요</div>
         </div>
 
@@ -205,7 +191,6 @@
         <div class="mc-dow">수</div><div class="mc-dow">목</div><div class="mc-dow">금</div><div class="mc-dow sat">토</div>
       </div>
       <div class="mc-days" id="mcDays"></div>
-
       <div class="mc-events-section">
         <div class="mc-events-title" id="mcEventsTitle">오늘의 일정</div>
         <div class="mc-events-list" id="mcEventsList">
@@ -215,7 +200,6 @@
     </aside>
   </div>
 
-  <!-- STATUS BAR -->
   <div class="status-bar">
     <span><span class="status-dot"></span>클라우드 동기화</span>
     <span id="wordCount">0 단어</span>
@@ -224,13 +208,8 @@
   </div>
 </div>
 
-<!-- ══════════════ SLASH MENU ══════════════ -->
 <div class="slash-menu" id="slashMenu"></div>
-
-<!-- ══════════════ TOAST ══════════════ -->
 <div class="saved-toast" id="savedToast">☁ 저장됨</div>
-
-<!-- ══════════════ MODALS ══════════════ -->
 
 <!-- 새 문서 모달 -->
 <div class="modal-overlay" id="newDocModal">
