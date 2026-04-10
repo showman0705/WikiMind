@@ -531,12 +531,56 @@ function renderTree() {
 
 function docItemHTML(d) {
   const active = d.id == state.activeDocId ? "active" : "";
-  return `<div class="doc-item ${active}" onclick="openDoc('${d.id}')">
+  return `<div class="doc-item ${active}" onclick="openDoc('${d.id}')"
+    draggable="true"
+    data-doc-id="${d.id}"
+    ondragstart="dragStartDoc(event,'${d.id}')"
+    ondragover="dragOverDoc(event)"
+    ondrop="dropDoc(event,'${d.id}')"
+    ondragend="dragEndDoc(event)">
+    <span class="doc-drag-handle" title="드래그하여 이동">⠿</span>
     <span class="doc-icon">📄</span>
     <span class="doc-name">${escHtml(d.title)}</span>
     <button class="doc-delete" onclick="deleteDocById(event,'${d.id}')">✕</button>
   </div>`;
 }
+
+// ─── 문서 드래그앤드롭 재정렬 ───
+let _dragDocId = null;
+
+window.dragStartDoc = function (e, id) {
+  _dragDocId = id;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", id);
+  setTimeout(() => { const el = e.target; if (el) el.classList.add("dragging"); }, 0);
+};
+
+window.dragOverDoc = function (e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  // 드롭 위치 하이라이트
+  document.querySelectorAll(".doc-item.drag-over").forEach(el => el.classList.remove("drag-over"));
+  e.currentTarget.classList.add("drag-over");
+};
+
+window.dragEndDoc = function (e) {
+  e.target.classList.remove("dragging");
+  document.querySelectorAll(".doc-item.drag-over").forEach(el => el.classList.remove("drag-over"));
+  _dragDocId = null;
+};
+
+window.dropDoc = function (e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove("drag-over");
+  if (!_dragDocId || _dragDocId == targetId) return;
+  const fromIdx = state.docs.findIndex(d => d.id == _dragDocId);
+  const toIdx   = state.docs.findIndex(d => d.id == targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = state.docs.splice(fromIdx, 1);
+  state.docs.splice(toIdx, 0, moved);
+  _dragDocId = null;
+  renderAll();
+};
 
 function renderTags() {
   const all = [...new Set(state.docs.flatMap((d) => d.tags))];
@@ -1574,8 +1618,11 @@ window.navMiniCal = function (dir) {
 window.selectMiniCalDate = function (dStr) {
   state.selectedDate = dStr;
   renderMiniCalendar();
-  // 일정 추가 모달 열기
-  $("eventDate").value = dStr;
+};
+
+// 일정 추가 모달 열기 (캘린더 + 버튼 또는 날짜 더블클릭)
+window.openAddEventModal = function (dStr) {
+  $("eventDate").value = dStr || state.selectedDate || "";
   $("eventStartTime").value = "";
   $("eventEndTime").value = "";
   $("eventTitle").value = "";
@@ -1671,7 +1718,7 @@ window.renderMiniCalendar = function () {
           `</div>`
         : "";
 
-    html += `<div class="${cls}" onclick="selectMiniCalDate('${dStr}')">${i}${dotsHtml}</div>`;
+    html += `<div class="${cls}" onclick="selectMiniCalDate('${dStr}')" ondblclick="openAddEventModal('${dStr}')" title="더블클릭: 일정 추가">${i}${dotsHtml}</div>`;
   }
 
   // fill remaining

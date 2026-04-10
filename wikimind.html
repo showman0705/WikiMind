@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WikiMind — 개인 지식 베이스</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="wikimind.css?v=4">
+<link rel="stylesheet" href="wikimind.css?v=7">
 </head>
 <body>
 
@@ -122,10 +122,8 @@
       <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
         <span>태그</span>
       </div>
-      <div class="tag-list" id="tagList"></div>
-
-      <!-- 미니 캘린더 (왼쪽 사이드바 하단) -->
-      <div class="sidebar-cal" id="sidebarCal" style="display:none">
+      <!-- 미니 캘린더 (왼쪽 사이드바) -->
+      <div class="sidebar-cal" id="sidebarCal">
         <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
           <span>📅 캘린더</span>
         </div>
@@ -140,12 +138,21 @@
         </div>
         <div class="mc-days" id="mcDays"></div>
         <div class="mc-events-section">
-          <div class="mc-events-title" id="mcEventsTitle">오늘의 일정</div>
+          <div class="mc-events-title" id="mcEventsTitle" style="display:flex;align-items:center;justify-content:space-between">
+            <span>오늘의 일정</span>
+            <button class="sidebar-section-btn" onclick="openAddEventModal()" title="일정 추가" style="font-size:16px">＋</button>
+          </div>
           <div class="mc-events-list" id="mcEventsList">
             <div style="padding:8px 0;font-size:11px;color:var(--text3);text-align:center;">일정이 없습니다.</div>
           </div>
         </div>
       </div>
+
+      <!-- 태그 (맨 아래) -->
+      <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px;margin-top:auto">
+        <span>태그</span>
+      </div>
+      <div class="tag-list" id="tagList"></div>
     </aside>
 
     <div class="editor-area" id="editorArea">
@@ -268,6 +275,6 @@
   </div>
 </div>
 
-<script type="module" src="wikimind.js?v=6"></script>
+<script type="module" src="wikimind.js?v=7"></script>
 </body>
 </html>
