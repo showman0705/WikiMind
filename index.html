@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WikiMind — 개인 지식 베이스</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="wikimind.css?v=8">
+</head>
+<body>
+
+<!-- ══════════════ LOADING ══════════════ -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <div style="font-size:12px;color:var(--text3)">로딩 중...</div>
+</div>
+
+<!-- ══════════════ AUTH PAGE ══════════════ -->
+<div id="authPage">
+  <div class="auth-card">
+    <div class="auth-logo">Wiki<span>Mind</span></div>
+    <div class="auth-subtitle">계속하려면 로그인하세요</div>
+    <span id="authTitle"></span>
+
+    <div class="auth-social" id="authSocial">
+      <button class="social-btn" onclick="handleSocialLogin(googleProvider)">
+        <span class="si" style="font-weight:700;color:#4285F4">G</span>
+        Google로 계속하기
+      </button>
+      <button class="social-btn" onclick="handleSocialLogin(githubProvider)">
+        <span class="si">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+        </span>
+        GitHub로 계속하기
+      </button>
+    </div>
+
+    <div class="auth-divider" id="authDivider"><span>또는 이메일로</span></div>
+
+    <div class="auth-form-group" id="authNameWrap" style="display:none">
+      <input class="auth-input" id="authName" type="text" placeholder="이름">
+    </div>
+    <div class="auth-form-group">
+      <input class="auth-input" id="authEmail" type="email" placeholder="이메일"
+        onkeydown="if(event.key==='Enter')document.getElementById('authSubmitBtn').click()">
+    </div>
+    <div class="auth-form-group" id="authPasswordWrap">
+      <input class="auth-input" id="authPassword" type="password" placeholder="비밀번호"
+        onkeydown="if(event.key==='Enter')document.getElementById('authSubmitBtn').click()">
+    </div>
+
+    <div id="authError" class="auth-msg"></div>
+    <button class="auth-submit" id="authSubmitBtn">로그인</button>
+
+    <div id="authFooter">
+      <span class="auth-link" onclick="setAuthMode('signup')">회원가입</span>
+      <span class="auth-link" onclick="setAuthMode('reset')">비밀번호 찾기</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ VERIFY PAGE ══════════════ -->
+<div id="verifyPage">
+  <div class="verify-card">
+    <span class="verify-icon">📬</span>
+    <div class="verify-title">이메일을 확인해주세요</div>
+    <p class="verify-desc">아래 주소로 인증 메일을 보냈습니다.</p>
+    <span class="verify-email" id="verifyEmail"></span>
+    <p class="verify-hint">
+      메일함에서 <strong style="color:var(--text)">WikiMind 인증 링크</strong>를 클릭하면<br>
+      자동으로 앱이 열립니다. 스팸 폴더도 확인해보세요.
+    </p>
+    <div class="verify-actions">
+      <button id="resendBtn" onclick="handleResendVerification()">인증 메일 재발송</button>
+      <button class="verify-signout" onclick="handleVerifySignOut()">다른 계정으로 로그인</button>
+    </div>
+    <div class="verify-polling">
+      <span class="polling-dot"></span>
+      <span class="polling-dot"></span>
+      <span class="polling-dot"></span>
+      인증 완료 확인 중...
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ APP PAGE ══════════════ -->
+<div id="appPage">
+
+  <header>
+    <button class="hamburger-btn" id="leftMenuBtn" onclick="toggleLeftSidebar()"
+      style="display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;margin-right:8px;line-height:1;">☰</button>
+    <div class="logo">Wiki<span>Mind</span></div>
+
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="문서 검색...">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn" style="padding:4px 8px;font-size:14px;margin-right:4px;"
+        id="hdrBtn-calendar" onclick="toggleRightSidebar()" title="달력 켜기/끄기">📅</button>
+      <button class="btn" onclick="exportDoc()">내보내기</button>
+      <button class="btn btn-primary" onclick="openNewDocModal()">+ 새 문서</button>
+      <div id="userMenuWrap"></div>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <aside>
+      <div class="sidebar-top">
+        <button class="new-doc-btn" onclick="openNewDocModal()">＋ 새 문서 만들기</button>
+      </div>
+      <div class="sidebar-section">
+        <span>문서</span>
+        <button class="sidebar-section-btn" onclick="openNewFolderModal()" title="새 폴더 추가">＋</button>
+      </div>
+      <div class="doc-tree" id="docTree"></div>
+      <!-- 미니 캘린더 (왼쪽 사이드바) -->
+      <div class="sidebar-cal" id="sidebarCal">
+        <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
+          <span>📅 캘린더</span>
+        </div>
+        <div class="mc-hdr">
+          <button class="mc-nav" onclick="navMiniCal(-1)">&lt;</button>
+          <div class="mc-title" id="mcTitle">2026년 4월</div>
+          <button class="mc-nav" onclick="navMiniCal(1)">&gt;</button>
+        </div>
+        <div class="mc-grid">
+          <div class="mc-dow sun">일</div><div class="mc-dow">월</div><div class="mc-dow">화</div>
+          <div class="mc-dow">수</div><div class="mc-dow">목</div><div class="mc-dow">금</div><div class="mc-dow sat">토</div>
+        </div>
+        <div class="mc-days" id="mcDays"></div>
+        <div class="mc-events-section">
+          <div class="mc-events-title" id="mcEventsTitle" style="display:flex;align-items:center;justify-content:space-between">
+            <span>오늘의 일정</span>
+            <button class="sidebar-section-btn" onclick="openScheduleModal()" title="일정 보기/추가" style="font-size:16px">＋</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 태그 (맨 아래) -->
+      <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px;margin-top:auto">
+        <span>태그</span>
+      </div>
+      <div class="tag-list" id="tagList"></div>
+    </aside>
+
+    <div class="resize-handle" id="sidebarResize"></div>
+
+    <div class="editor-area" id="editorArea">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📖</div>
+        <div class="empty-text">문서를 선택하거나 새로 만들어보세요</div>
+        <div class="empty-sub">사이드바에서 문서를 선택하거나 + 새 문서를 클릭하세요</div>
+      </div>
+
+      <div id="editorWrapper" style="display:none">
+
+        <div class="doc-header">
+          <input type="text" class="doc-title-input" id="docTitle" placeholder="제목 없는 문서">
+          <div class="doc-meta">
+            <span class="doc-date" id="docDate"></span>
+            <div class="tag-input-wrap" id="tagInputWrap"></div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="toolbar-btn" onclick="insertMd('**','**')" style="font-weight:700" title="굵게">B</button>
+          <button class="toolbar-btn" onclick="insertMd('*','*')"   style="font-style:italic" title="기울임">I</button>
+          <button class="toolbar-btn" onclick="insertMd('~~','~~')" style="text-decoration:line-through" title="취소선">S</button>
+          <button class="toolbar-btn" onclick="insertMd('\`','\`')" title="인라인 코드">{ }</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="insertLine('# ')"   title="제목 1">H1</button>
+          <button class="toolbar-btn" onclick="insertLine('## ')"  title="제목 2">H2</button>
+          <button class="toolbar-btn" onclick="insertLine('### ')" title="제목 3">H3</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="insertLine('- ')"     title="목록">•</button>
+          <button class="toolbar-btn" onclick="insertLine('1. ')"    title="번호 목록">1.</button>
+          <button class="toolbar-btn" onclick="insertLine('- [ ] ')" title="체크박스">☐</button>
+          <button class="toolbar-btn" onclick="insertLine('> ')"     title="인용">❝</button>
+          <button class="toolbar-btn" onclick="insertLine('---')"    title="구분선">—</button>
+          <button class="toolbar-btn" onclick="insertWikiLink()"     title="위키 링크">[[]]</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="insertImageFromToolbar()" title="이미지 삽입">🖼</button>
+          <button class="toolbar-btn" onclick="insertFileFromToolbar()"  title="파일 첨부">📎</button>
+        </div>
+
+        <!-- 블록 에디터 영역 -->
+        <div class="editor-main" id="editorMain">
+          <div class="notion-blocks" id="notionBlocks"></div>
+          <div class="drop-overlay">🖼 이미지/파일을 여기에 놓으세요</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="status-bar">
+    <span><span class="status-dot"></span>클라우드 동기화</span>
+    <span id="wordCount">0 단어</span>
+    <span id="charCount">0 자</span>
+    <span id="docCount">0 문서</span>
+  </div>
+</div>
+
+<div class="slash-menu" id="slashMenu"></div>
+<div class="saved-toast" id="savedToast">☁ 저장됨</div>
+
+<!-- 새 문서 모달 -->
+<div class="modal-overlay" id="newDocModal">
+  <div class="modal">
+    <h3>새 문서 만들기</h3>
+    <input type="text" id="newDocName" placeholder="문서 제목"
+      onkeydown="if(event.key==='Enter')createDoc()">
+    <select id="newDocFolder"></select>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newDocModal')">취소</button>
+      <button class="btn btn-primary" onclick="createDoc()">만들기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 새 폴더 모달 -->
+<div class="modal-overlay" id="newFolderModal">
+  <div class="modal">
+    <h3>새 폴더 만들기</h3>
+    <input type="text" id="newFolderName" placeholder="폴더 이름"
+      onkeydown="if(event.key==='Enter')createFolder()">
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newFolderModal')">취소</button>
+      <button class="btn btn-primary" onclick="createFolder()">만들기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 파일 미리보기 모달 -->
+<div class="modal-overlay" id="filePreviewModal">
+  <div class="modal file-preview-modal">
+    <div class="file-preview-hdr">
+      <span id="previewFileName" style="font-size:14px;font-weight:600;color:var(--text)"></span>
+      <button class="btn" style="padding:2px 8px" onclick="closeModal('filePreviewModal')">✕</button>
+    </div>
+    <div class="file-preview-body" id="previewContent"></div>
+    <div class="modal-actions">
+      <a id="previewDownloadBtn" class="btn btn-primary" download>다운로드</a>
+      <button class="btn" onclick="closeModal('filePreviewModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 일정 추가 모달 -->
+<div class="modal-overlay" id="addEventModal">
+  <div class="modal">
+    <h3>📅 일정 추가</h3>
+    <input type="text" id="eventTitle" placeholder="일정 제목" style="margin-bottom:8px"
+      onkeydown="if(event.key==='Enter')confirmAddEvent()">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="date" id="eventDate" style="flex:1">
+      <input type="time" id="eventStartTime" style="flex:1" placeholder="시작 시간">
+      <input type="time" id="eventEndTime" style="flex:1" placeholder="종료 시간">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('addEventModal')">취소</button>
+      <button class="btn btn-primary" onclick="confirmAddEvent()">현재 문서에 추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 일정 관리 모달 -->
+<div class="modal-overlay" id="scheduleModal">
+  <div class="modal schedule-modal">
+    <div class="schedule-modal-hdr">
+      <span id="scheduleDateTitle">📅 일정</span>
+      <button class="btn" style="padding:2px 8px;font-size:13px" onclick="closeModal('scheduleModal')">✕</button>
+    </div>
+    <div class="schedule-list" id="scheduleList"></div>
+    <div class="schedule-add-form">
+      <input type="text" id="scheduleNewTitle" placeholder="새 일정 제목 입력 후 Enter"
+        onkeydown="if(event.key==='Enter')saveScheduleEvent()">
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="time" id="scheduleNewStart" style="flex:1">
+        <input type="time" id="scheduleNewEnd" style="flex:1">
+      </div>
+      <div class="modal-actions" style="margin-top:12px">
+        <button class="btn" onclick="closeModal('scheduleModal')">닫기</button>
+        <button class="btn btn-primary" onclick="saveScheduleEvent()">일정 추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="wikimind.js?v=8"></script>
+</body>
+</html>
