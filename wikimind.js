@@ -840,6 +840,10 @@ function handleBlockKeydown(e) {
   if (!block) return;
 
   if (e.key === "Enter" && !e.shiftKey) {
+    // Slash menu visible → let global handler pick the slash item
+    if (state.slashVisible) return;
+    // Empty block → do nothing (prevent stacking empty blocks)
+    if (ta.value.trim() === "") { e.preventDefault(); return; }
     const isHeading = /^#{1,6}\s/.test(block.md.split("\n")[0]);
     const cursorAtEnd = ta.selectionStart === ta.value.length;
     if (isHeading || cursorAtEnd) {
@@ -848,7 +852,7 @@ function handleBlockKeydown(e) {
       createBlockAfter(id);
       return;
     }
-    // Shift+Enter or mid-content Enter adds newline naturally
+    // Mid-content Enter adds newline naturally (for lists, etc.)
   }
 
   if (e.key === "Backspace" && ta.value === "") {
@@ -865,6 +869,9 @@ function handleBlockKeydown(e) {
   }
 
   if (e.key === "Escape") { commitBlock(id); blockEditor.activeId = null; }
+
+  // Arrow keys: don't intercept when slash menu is open (global handler navigates it)
+  if (state.slashVisible) return;
 
   if (e.key === "ArrowUp" && ta.selectionStart === 0) {
     const idx = blockEditor.blocks.findIndex((b) => b.id === id);
@@ -1239,9 +1246,12 @@ function renderSlashMenu(items, ta) {
         <div><div class="slash-item-label">${c.label}</div><div class="slash-item-desc">${c.desc}</div></div>
       </div>`
     ).join("");
+  // Position near the textarea's cursor
   const rect = ta.getBoundingClientRect();
-  menu.style.left = (rect.left + 28) + "px";
-  menu.style.top  = (rect.top + 80) + "px";
+  const lineCount = ta.value.substring(0, ta.selectionStart).split("\n").length;
+  const lineH = parseFloat(getComputedStyle(ta).lineHeight) || 26;
+  menu.style.left = (rect.left + 12) + "px";
+  menu.style.top  = (rect.top + lineCount * lineH + 4) + "px";
   menu.style.display = "block";
   menu.classList.add("visible");
   menu._filtered = items;
