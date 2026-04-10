@@ -163,13 +163,9 @@
           <button class="toolbar-btn" onclick="insertFileFromToolbar()"  title="파일 첨부">📎</button>
         </div>
 
-        <!-- 뷰/에디터 영역 -->
+        <!-- 블록 에디터 영역 -->
         <div class="editor-main" id="editorMain">
-          <!-- 렌더링 뷰 (기본) -->
-          <div class="notion-view" id="notionView" onclick="switchToEdit()"></div>
-          <!-- 편집 textarea (클릭 시) -->
-          <textarea class="notion-textarea" id="notionEditor"
-            placeholder="마크다운으로 작성하세요...&#10;&#10;/ 를 입력하면 단축어 메뉴가 나타납니다"></textarea>
+          <div class="notion-blocks" id="notionBlocks"></div>
           <div class="drop-overlay">🖼 이미지/파일을 여기에 놓으세요</div>
         </div>
 
@@ -238,6 +234,6 @@
   </div>
 </div>
 
-<script type="module" src="wikimind.js"></script>
+<script type="module" src="wikimind.js?v=2"></script>
 </body>
 </html>

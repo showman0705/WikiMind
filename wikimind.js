@@ -698,76 +698,232 @@ window.closeModal = function (id) {
 };
 
 // ════════════════════════════════════════════
-//  NOTION-STYLE VIEW/EDIT
+//  BLOCK EDITOR
 // ════════════════════════════════════════════
-function renderNotionEditor(md) {
-  $("notionEditor").value = md;
-  refreshView(md);
-  switchToView();
-}
-
-function refreshView(md) {
-  const viewEl = $("notionView");
-  viewEl.innerHTML = parseMarkdown(md);
-  viewEl.querySelectorAll("pre").forEach((pre) => {
-    const code = pre.querySelector("code");
-    if (!code) return;
-    const btn = document.createElement("button");
-    btn.className = "copy-btn";
-    btn.textContent = "복사";
-    btn.onclick = () => {
-      navigator.clipboard.writeText(code.innerText).then(() => {
-        btn.textContent = "✓ 복사됨";
-        btn.classList.add("copied");
-        setTimeout(() => { btn.textContent = "복사"; btn.classList.remove("copied"); }, 2000);
-      });
-    };
-    pre.appendChild(btn);
-  });
-}
-
-window.switchToEdit = function() {
-  $("editorMain").classList.add("editing");
-  const ta = $("notionEditor");
-  ta.focus();
-  ta.setSelectionRange(ta.value.length, ta.value.length);
+const blockEditor = {
+  blocks: [],   // [{id, md}]
+  activeId: null,
 };
 
-window.switchToView = function() {
-  const d = state.docs.find((x) => x.id == state.activeDocId);
-  if (d) refreshView(d.content);
-  $("editorMain").classList.remove("editing");
+function splitMdToBlocks(md) {
+  if (!md || !md.trim()) return [{ id: 1, md: "" }];
+  const result = [];
+  let current = "";
+  let inFence = false;
+  let id = 1;
+
+  for (const line of md.split("\n")) {
+    if (/^(`{3}|~{3})/.test(line)) {
+      inFence = !inFence;
+      current += (current ? "\n" : "") + line;
+      if (!inFence) {
+        result.push({ id: id++, md: current });
+        current = "";
+      }
+      continue;
+    }
+    if (inFence) { current += "\n" + line; continue; }
+
+    if (line === "") {
+      if (current.trim()) { result.push({ id: id++, md: current }); current = ""; }
+    } else {
+      current += (current ? "\n" : "") + line;
+    }
+  }
+  if (current.trim()) result.push({ id: id++, md: current });
+  return result.length ? result : [{ id: 1, md: "" }];
+}
+
+function renderNotionEditor(md) {
+  blockEditor.blocks = splitMdToBlocks(md);
+  blockEditor.activeId = null;
+  renderAllBlocks();
+}
+
+function renderAllBlocks() {
+  const container = $("notionBlocks");
+  if (!container) return;
+  container.innerHTML = "";
+  blockEditor.blocks.forEach((block) => container.appendChild(createBlockEl(block)));
+}
+
+function addCopyBtn(pre) {
+  if (pre.querySelector(".copy-btn")) return;
+  const code = pre.querySelector("code");
+  if (!code) return;
+  const btn = document.createElement("button");
+  btn.className = "copy-btn";
+  btn.textContent = "복사";
+  btn.onclick = () => {
+    navigator.clipboard.writeText(code.innerText).then(() => {
+      btn.textContent = "✓ 복사됨";
+      btn.classList.add("copied");
+      setTimeout(() => { btn.textContent = "복사"; btn.classList.remove("copied"); }, 2000);
+    });
+  };
+  pre.appendChild(btn);
+}
+
+function renderBlockContent(div, block) {
+  div.classList.remove("editing");
+  if (block.md.trim()) {
+    div.innerHTML = parseMarkdown(block.md);
+    div.querySelectorAll("pre").forEach(addCopyBtn);
+  } else {
+    div.innerHTML = '<span class="nb-placeholder">내용을 입력하세요...</span>';
+  }
+}
+
+function createBlockEl(block) {
+  const div = document.createElement("div");
+  div.className = "nb";
+  div.dataset.id = block.id;
+  renderBlockContent(div, block);
+  div.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    focusBlock(block.id);
+  });
+  return div;
+}
+
+function focusBlock(id) {
+  if (blockEditor.activeId === id) return;
+  if (blockEditor.activeId !== null) commitBlock(blockEditor.activeId);
+
+  const block = blockEditor.blocks.find((b) => b.id === id);
+  const div = document.querySelector(`.nb[data-id="${id}"]`);
+  if (!div || !block) return;
+
+  blockEditor.activeId = id;
+  div.classList.add("editing");
+  div.innerHTML = "";
+
+  const ta = document.createElement("textarea");
+  ta.className = "nb-ta";
+  ta.value = block.md;
+  ta.placeholder = "내용을 입력하세요...";
+  ta.rows = Math.max(1, (block.md.match(/\n/g) || []).length + 1);
+
+  ta.addEventListener("input", () => {
+    block.md = ta.value;
+    ta.rows = Math.max(1, (ta.value.match(/\n/g) || []).length + 1);
+    syncContent();
+    handleSlashInput();
+  });
+
+  ta.addEventListener("keydown", handleBlockKeydown);
+
+  ta.addEventListener("blur", () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (active && (active.closest(".toolbar") || active.closest(".slash-menu"))) return;
+      if (blockEditor.activeId === id) {
+        commitBlock(id);
+        blockEditor.activeId = null;
+      }
+    }, 150);
+  });
+
+  div.appendChild(ta);
+  setTimeout(() => {
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+  }, 0);
+}
+
+function handleBlockKeydown(e) {
+  const div = e.target.closest(".nb");
+  if (!div) return;
+  const id = parseInt(div.dataset.id);
+  const block = blockEditor.blocks.find((b) => b.id === id);
+  const ta = e.target;
+  if (!block) return;
+
+  if (e.key === "Enter" && !e.shiftKey) {
+    const isHeading = /^#{1,6}\s/.test(block.md.split("\n")[0]);
+    const cursorAtEnd = ta.selectionStart === ta.value.length;
+    if (isHeading || cursorAtEnd) {
+      e.preventDefault();
+      commitBlock(id);
+      createBlockAfter(id);
+      return;
+    }
+    // Shift+Enter or mid-content Enter adds newline naturally
+  }
+
+  if (e.key === "Backspace" && ta.value === "") {
+    e.preventDefault();
+    const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+    if (idx === 0 && blockEditor.blocks.length === 1) return;
+    blockEditor.blocks.splice(idx, 1);
+    blockEditor.activeId = null;
+    div.remove();
+    const prevBlock = blockEditor.blocks[Math.max(0, idx - 1)];
+    if (prevBlock) focusBlock(prevBlock.id);
+    syncContent();
+    return;
+  }
+
+  if (e.key === "Escape") { commitBlock(id); blockEditor.activeId = null; }
+
+  if (e.key === "ArrowUp" && ta.selectionStart === 0) {
+    const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+    if (idx > 0) { e.preventDefault(); commitBlock(id); focusBlock(blockEditor.blocks[idx - 1].id); }
+  }
+  if (e.key === "ArrowDown" && ta.selectionEnd === ta.value.length) {
+    const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+    if (idx < blockEditor.blocks.length - 1) { e.preventDefault(); commitBlock(id); focusBlock(blockEditor.blocks[idx + 1].id); }
+  }
+}
+
+function commitBlock(id) {
+  const block = blockEditor.blocks.find((b) => b.id === id);
+  const div = document.querySelector(`.nb[data-id="${id}"]`);
+  if (!div) return;
+  if (block) renderBlockContent(div, block);
+  div.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    focusBlock(id);
+  });
+  if (blockEditor.activeId === id) blockEditor.activeId = null;
+}
+
+function createBlockAfter(id) {
+  const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+  const newBlock = { id: Date.now(), md: "" };
+  blockEditor.blocks.splice(idx + 1, 0, newBlock);
+  const div = document.querySelector(`.nb[data-id="${id}"]`);
+  const newDiv = createBlockEl(newBlock);
+  div.after(newDiv);
+  blockEditor.activeId = null;
+  focusBlock(newBlock.id);
+  syncContent();
+}
+
+function getActiveBlockTa() {
+  if (blockEditor.activeId === null) return null;
+  const div = document.querySelector(`.nb[data-id="${blockEditor.activeId}"]`);
+  return div ? div.querySelector(".nb-ta") : null;
+}
+
+// Stub for backwards-compat (toolbar file upload etc.)
+window.switchToEdit = function () {
+  if (blockEditor.activeId === null && blockEditor.blocks.length) {
+    focusBlock(blockEditor.blocks[blockEditor.blocks.length - 1].id);
+  }
+};
+window.switchToView = function () {
+  if (blockEditor.activeId !== null) { commitBlock(blockEditor.activeId); blockEditor.activeId = null; }
 };
 
 function syncContent() {
   const d = state.docs.find((x) => x.id == state.activeDocId);
   if (!d) return;
-  d.content = $("notionEditor").value;
+  d.content = blockEditor.blocks.map((b) => b.md).join("\n\n");
   d.updatedAt = new Date().toISOString();
   updateStatus();
   schedulePush(d);
 }
-
-// ════════════════════════════════════════════
-//  EDITOR EVENTS
-// ════════════════════════════════════════════
-$("notionEditor").addEventListener("input", () => {
-  syncContent();
-  handleSlashInput();
-});
-
-$("notionEditor").addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { e.preventDefault(); switchToView(); }
-});
-
-$("notionEditor").addEventListener("blur", () => {
-  setTimeout(() => {
-    const active = document.activeElement;
-    if (!active) { switchToView(); return; }
-    if (active.closest && (active.closest(".toolbar") || active.closest(".slash-menu"))) return;
-    switchToView();
-  }, 150);
-});
 
 $("docTitle").addEventListener("input", () => {
   const d = state.docs.find((x) => x.id == state.activeDocId);
@@ -1051,7 +1207,8 @@ const SLASH_COMMANDS = [
 ];
 
 function handleSlashInput() {
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { hideSlashMenu(); return; }
   const val = ta.value;
   const pos = ta.selectionStart;
   const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
@@ -1121,10 +1278,13 @@ window.selectSlashItem = function (idx) {
 };
 
 function executeSlash(cmd) {
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { hideSlashMenu(); return; }
   const pos = ta.selectionStart;
   ta.value = ta.value.slice(0, state.slashStartPos) + ta.value.slice(pos);
   ta.selectionStart = ta.selectionEnd = state.slashStartPos;
+  const block = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (block) block.md = ta.value;
   hideSlashMenu();
   cmd.action();
 }
@@ -1154,49 +1314,72 @@ function handleFileInsert(file) {
   reader.readAsDataURL(file);
 }
 
-// Drag & Drop onto view or editor
+// Drag & Drop onto block editor
 const dropOverlay = document.querySelector(".drop-overlay");
-["notionView", "notionEditor"].forEach((id) => {
-  const el = $(id);
-  if (!el) return;
-  el.addEventListener("dragover", (e) => { e.preventDefault(); dropOverlay.classList.add("active"); });
-  el.addEventListener("dragleave", () => dropOverlay.classList.remove("active"));
-  el.addEventListener("drop", (e) => {
+const notionBlocksEl = $("notionBlocks");
+if (notionBlocksEl) {
+  notionBlocksEl.addEventListener("dragover", (e) => { e.preventDefault(); dropOverlay.classList.add("active"); });
+  notionBlocksEl.addEventListener("dragleave", () => dropOverlay.classList.remove("active"));
+  notionBlocksEl.addEventListener("drop", (e) => {
     e.preventDefault(); dropOverlay.classList.remove("active");
     const file = e.dataTransfer.files[0];
     if (file) handleFileInsert(file);
   });
-});
+}
 
 // ════════════════════════════════════════════
 //  TOOLBAR HELPERS (textarea)
 // ════════════════════════════════════════════
 function insertAtCursor(text) {
-  switchToEdit();
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) {
+    // No block active — focus last block then insert
+    const last = blockEditor.blocks[blockEditor.blocks.length - 1];
+    if (last) {
+      focusBlock(last.id);
+      setTimeout(() => {
+        const ta2 = getActiveBlockTa();
+        if (!ta2) return;
+        const s = ta2.selectionStart;
+        ta2.value = ta2.value.slice(0, s) + text + ta2.value.slice(ta2.selectionEnd);
+        ta2.selectionStart = ta2.selectionEnd = s + text.length;
+        const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+        if (blk) blk.md = ta2.value;
+        ta2.dispatchEvent(new Event("input"));
+      }, 60);
+    }
+    return;
+  }
   const s = ta.selectionStart;
   ta.value = ta.value.slice(0, s) + text + ta.value.slice(ta.selectionEnd);
   ta.selectionStart = ta.selectionEnd = s + text.length;
+  const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (blk) blk.md = ta.value;
+  ta.rows = Math.max(1, (ta.value.match(/\n/g) || []).length + 1);
   ta.dispatchEvent(new Event("input"));
   ta.focus();
 }
 
 window.insertMd = function (before, after) {
-  switchToEdit();
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { switchToEdit(); return; }
   const s = ta.selectionStart, e = ta.selectionEnd;
   const sel = ta.value.slice(s, e) || "텍스트";
   ta.setRangeText(before + sel + after, s, e, "select");
+  const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (blk) blk.md = ta.value;
   ta.dispatchEvent(new Event("input"));
   ta.focus();
 };
 
 function insertLine(prefix) {
-  switchToEdit();
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { switchToEdit(); return; }
   const s = ta.selectionStart;
   const ls = ta.value.lastIndexOf("\n", s - 1) + 1;
   ta.setRangeText(prefix, ls, ls, "end");
+  const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (blk) blk.md = ta.value;
   ta.dispatchEvent(new Event("input"));
   ta.focus();
 }
@@ -1270,7 +1453,7 @@ searchInput.addEventListener("input", () => {
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".search-wrap"))
     searchResults.classList.remove("visible");
-  if (!e.target.closest(".slash-menu") && !e.target.closest("#notionEditor"))
+  if (!e.target.closest(".slash-menu") && !e.target.closest(".nb-ta"))
     hideSlashMenu();
 });
 
