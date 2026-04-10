@@ -708,7 +708,8 @@ aside {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .sidebar-top {
   padding: 10px 8px 8px;
@@ -763,9 +764,16 @@ aside {
   color: var(--accent);
 }
 .doc-tree {
-  flex: 1;
+  min-height: 60px;
+  max-height: 280px;
   overflow-y: auto;
   padding: 0 6px 12px;
+}
+/* 왼쪽 사이드바 미니 캘린더 */
+.sidebar-cal {
+  border-top: 1px solid var(--border);
+  padding-bottom: 12px;
+  flex-shrink: 0;
 }
 .folder-item {
   margin-bottom: 2px;
@@ -1280,6 +1288,138 @@ aside {
   border-radius: 6px;
   margin: 8px 0;
   border: 1px solid var(--border);
+}
+/* 파일 카드 */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  max-width: 480px;
+}
+.file-card-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.file-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.file-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-card-type {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.file-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.file-card-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+.file-card-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.file-card-btn.dl {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* 문서 내 이미지 */
+.doc-image {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  display: block;
+}
+/* 파일 미리보기 모달 */
+.file-preview-modal {
+  width: 80vw;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.file-preview-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.file-preview-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.file-preview-body img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.file-preview-body iframe {
+  width: 100%;
+  height: 60vh;
+  border: none;
+  border-radius: 6px;
+}
+.file-preview-nopreview {
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+  padding: 32px;
+}
+.file-preview-nopreview .no-preview-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+/* 일정 추가 모달 date/time inputs */
+#addEventModal input[type="date"],
+#addEventModal input[type="time"] {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 13px;
+  outline: none;
+  colorscheme: dark;
+}
+[data-theme="light"] #addEventModal input[type="date"],
+[data-theme="light"] #addEventModal input[type="time"] {
+  color-scheme: light;
 }
 .notion-blocks .file-embed {
   display: flex;

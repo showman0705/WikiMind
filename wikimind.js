@@ -770,7 +770,7 @@ function renderBlockContent(div, block) {
     div.innerHTML = parseMarkdown(block.md);
     div.querySelectorAll("pre").forEach(addCopyBtn);
   } else {
-    div.innerHTML = '<span class="nb-placeholder">내용을 입력하세요...</span>';
+    div.innerHTML = ""; // 빈 블록은 투명하게
   }
 }
 
@@ -842,8 +842,6 @@ function handleBlockKeydown(e) {
   if (e.key === "Enter" && !e.shiftKey) {
     // Slash menu visible → let global handler pick the slash item
     if (state.slashVisible) return;
-    // Empty block → do nothing (prevent stacking empty blocks)
-    if (ta.value.trim() === "") { e.preventDefault(); return; }
     const isHeading = /^#{1,6}\s/.test(block.md.split("\n")[0]);
     const cursorAtEnd = ta.selectionStart === ta.value.length;
     if (isHeading || cursorAtEnd) {
@@ -1024,17 +1022,38 @@ function parseMarkdown(md) {
     },
   );
 
-  // Images/files (기능 5)
-  md = md.replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, (m) => {
-    const match = m.match(/!\[([^\]]*)\]\((data:[^)]+)\)/);
-    if (!match) return m;
-    return `<img src="${match[2]}" alt="${escHtml(match[1])}" style="max-width:100%;border-radius:6px;margin:8px 0;border:1px solid var(--border)">`;
+  // Images/files — 플레이스홀더로 먼저 추출 (HTML 이스케이프 전에 처리)
+  const embeds = [];
+  // 이미지
+  md = md.replace(/!\[([^\]]*)\]\((data:[^\s)]+|https?:[^\s)]+)\)/g, (_, alt, src) => {
+    const idx = embeds.length;
+    embeds.push(`<img src="${src}" alt="${escHtml(alt)}" class="doc-image">`);
+    return `%%EMBED_${idx}%%`;
   });
-  md = md.replace(
-    /\[📎 ([^\]]+)\]\(([^)]+)\)/g,
-    (_, name, href) =>
-      `<div class="file-embed">📎 <a href="${href}" target="_blank" rel="noopener">${escHtml(name)}</a></div>`,
-  );
+  // 파일 첨부
+  md = md.replace(/\[📎 ([^\]]+)\]\((data:[^\s)]+|[^\s)]+)\)/g, (_, name, href) => {
+    const idx = embeds.length;
+    const storeIdx = (window._wmFiles = window._wmFiles || []).length;
+    window._wmFiles.push({ name, href });
+    const ext = name.split(".").pop().toLowerCase();
+    const icon = { pdf:"📄", doc:"📝", docx:"📝", xls:"📊", xlsx:"📊", ppt:"📋", pptx:"📋",
+      zip:"🗜", rar:"🗜", mp4:"🎬", mp3:"🎵", txt:"📃" }[ext] || "📎";
+    const typeLabel = { pdf:"PDF", doc:"Word", docx:"Word", xls:"Excel", xlsx:"Excel",
+      ppt:"PowerPoint", pptx:"PowerPoint", zip:"ZIP 압축", rar:"RAR 압축",
+      mp4:"동영상", mp3:"오디오", txt:"텍스트" }[ext] || "파일";
+    embeds.push(`<div class="file-card">
+      <div class="file-card-icon">${icon}</div>
+      <div class="file-card-info">
+        <div class="file-card-name">${escHtml(name)}</div>
+        <div class="file-card-type">${typeLabel}</div>
+      </div>
+      <div class="file-card-actions">
+        <button class="file-card-btn" onclick="previewFileEmbed(${storeIdx})">미리보기</button>
+        <a class="file-card-btn dl" href="${href}" download="${escHtml(name)}">다운로드</a>
+      </div>
+    </div>`);
+    return `%%EMBED_${idx}%%`;
+  });
 
   md = md
     .replace(/&/g, "&amp;")
@@ -1094,13 +1113,41 @@ function parseMarkdown(md) {
     .replace(/\n\n([^<\n].+?)(?=\n\n|$)/gs, (_, p) => `<p>${p}</p>`)
     .replace(/\n/g, "<br>");
 
-  // Restore code blocks (unescape for them)
+  // Restore code blocks
   codeBlocks.forEach((block, i) => {
     md = md.replace(`%%CODE_${i}%%`, block);
+  });
+  // Restore image/file embeds
+  embeds.forEach((html, i) => {
+    md = md.replace(`%%EMBED_${i}%%`, html);
   });
 
   return md;
 }
+
+// 파일 미리보기
+window.previewFileEmbed = function (idx) {
+  const file = (window._wmFiles || [])[idx];
+  if (!file) return;
+  $("previewFileName").textContent = file.name;
+  const dl = $("previewDownloadBtn");
+  dl.href = file.href;
+  dl.download = file.name;
+  const body = $("previewContent");
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (["jpg","jpeg","png","gif","webp","bmp","svg"].includes(ext)) {
+    body.innerHTML = `<img src="${file.href}" alt="${escHtml(file.name)}">`;
+  } else if (ext === "pdf") {
+    body.innerHTML = `<iframe src="${file.href}" title="${escHtml(file.name)}"></iframe>`;
+  } else {
+    body.innerHTML = `<div class="file-preview-nopreview">
+      <span class="no-preview-icon">📁</span>
+      이 파일 형식은 미리보기를 지원하지 않습니다.<br>
+      <span style="font-size:11px;margin-top:6px;display:block">${escHtml(file.name)}</span>
+    </div>`;
+  }
+  $("filePreviewModal").classList.add("visible");
+};
 
 // 기능 2: 위키 링크 — 문서 없으면 자동 생성
 window.jumpOrCreateDoc = function (title) {
@@ -1502,20 +1549,14 @@ window.toggleLeftSidebar = function () {
 };
 
 // ════════════════════════════════════════════
-//  MINI CALENDAR (우측 사이드바)
+//  MINI CALENDAR (왼쪽 사이드바 하단)
 // ════════════════════════════════════════════
 window.toggleRightSidebar = function () {
   state.rightSidebarOpen = !state.rightSidebarOpen;
-  const sb = $("rightSidebar");
+  const sb = $("sidebarCal");
   if (!sb) return;
-  if (state.rightSidebarOpen) {
-    sb.classList.add("open");
-    sb.classList.remove("collapsed");
-    renderMiniCalendar();
-  } else {
-    sb.classList.remove("open");
-    sb.classList.add("collapsed");
-  }
+  sb.style.display = state.rightSidebarOpen ? "block" : "none";
+  if (state.rightSidebarOpen) renderMiniCalendar();
 };
 
 window.navMiniCal = function (dir) {
@@ -1533,6 +1574,13 @@ window.navMiniCal = function (dir) {
 window.selectMiniCalDate = function (dStr) {
   state.selectedDate = dStr;
   renderMiniCalendar();
+  // 일정 추가 모달 열기
+  $("eventDate").value = dStr;
+  $("eventStartTime").value = "";
+  $("eventEndTime").value = "";
+  $("eventTitle").value = "";
+  $("addEventModal").classList.add("visible");
+  setTimeout(() => $("eventTitle").focus(), 80);
 };
 
 window.updateMiniCalendarData = function () {
@@ -1555,8 +1603,27 @@ window.updateMiniCalendarData = function () {
     }
   });
   state.combinedEvents = [...state.nativeEvents, ...docEvents];
-  if (state.rightSidebarOpen && $("rightSidebar")) {
-    renderMiniCalendar();
+  if (state.rightSidebarOpen) renderMiniCalendar();
+};
+
+// 일정 추가 확인
+window.confirmAddEvent = function () {
+  const title = $("eventTitle").value.trim();
+  const date = $("eventDate").value;
+  if (!title || !date) return;
+  const st = $("eventStartTime").value;
+  const et = $("eventEndTime").value;
+  const id = Math.random().toString(36).substr(2, 8);
+  let line = `📅[${id}] ${date}`;
+  if (st) line += ` ${st}`;
+  if (st && et) line += ` ~ ${et}`;
+  line += ` ${title}`;
+  closeModal("addEventModal");
+  // 현재 문서에 삽입
+  if (state.activeDocId) {
+    insertAtCursor("\n" + line + "\n");
+  } else {
+    showToast("문서를 먼저 선택해주세요");
   }
 };
 

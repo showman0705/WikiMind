@@ -123,6 +123,29 @@
         <span>태그</span>
       </div>
       <div class="tag-list" id="tagList"></div>
+
+      <!-- 미니 캘린더 (왼쪽 사이드바 하단) -->
+      <div class="sidebar-cal" id="sidebarCal" style="display:none">
+        <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
+          <span>📅 캘린더</span>
+        </div>
+        <div class="mc-hdr">
+          <button class="mc-nav" onclick="navMiniCal(-1)">&lt;</button>
+          <div class="mc-title" id="mcTitle">2026년 4월</div>
+          <button class="mc-nav" onclick="navMiniCal(1)">&gt;</button>
+        </div>
+        <div class="mc-grid">
+          <div class="mc-dow sun">일</div><div class="mc-dow">월</div><div class="mc-dow">화</div>
+          <div class="mc-dow">수</div><div class="mc-dow">목</div><div class="mc-dow">금</div><div class="mc-dow sat">토</div>
+        </div>
+        <div class="mc-days" id="mcDays"></div>
+        <div class="mc-events-section">
+          <div class="mc-events-title" id="mcEventsTitle">오늘의 일정</div>
+          <div class="mc-events-list" id="mcEventsList">
+            <div style="padding:8px 0;font-size:11px;color:var(--text3);text-align:center;">일정이 없습니다.</div>
+          </div>
+        </div>
+      </div>
     </aside>
 
     <div class="editor-area" id="editorArea">
@@ -172,28 +195,6 @@
       </div>
     </div>
 
-    <!-- RIGHT SIDEBAR (CALENDAR) -->
-    <aside class="right-sidebar collapsed" id="rightSidebar">
-      <div class="mc-brand">
-        <span class="mc-brand-logo">Wiki<span>Mind</span> Calendar</span>
-      </div>
-      <div class="mc-hdr">
-        <button class="mc-nav" onclick="navMiniCal(-1)">&lt;</button>
-        <div class="mc-title" id="mcTitle">10월 2023</div>
-        <button class="mc-nav" onclick="navMiniCal(1)">&gt;</button>
-      </div>
-      <div class="mc-grid">
-        <div class="mc-dow sun">일</div><div class="mc-dow">월</div><div class="mc-dow">화</div>
-        <div class="mc-dow">수</div><div class="mc-dow">목</div><div class="mc-dow">금</div><div class="mc-dow sat">토</div>
-      </div>
-      <div class="mc-days" id="mcDays"></div>
-      <div class="mc-events-section">
-        <div class="mc-events-title" id="mcEventsTitle">오늘의 일정</div>
-        <div class="mc-events-list" id="mcEventsList">
-          <div style="padding:10px 0;font-size:12px;color:var(--text3);text-align:center;">일정이 없습니다.</div>
-        </div>
-      </div>
-    </aside>
   </div>
 
   <div class="status-bar">
@@ -234,6 +235,39 @@
   </div>
 </div>
 
-<script type="module" src="wikimind.js?v=4"></script>
+<!-- 파일 미리보기 모달 -->
+<div class="modal-overlay" id="filePreviewModal">
+  <div class="modal file-preview-modal">
+    <div class="file-preview-hdr">
+      <span id="previewFileName" style="font-size:14px;font-weight:600;color:var(--text)"></span>
+      <button class="btn" style="padding:2px 8px" onclick="closeModal('filePreviewModal')">✕</button>
+    </div>
+    <div class="file-preview-body" id="previewContent"></div>
+    <div class="modal-actions">
+      <a id="previewDownloadBtn" class="btn btn-primary" download>다운로드</a>
+      <button class="btn" onclick="closeModal('filePreviewModal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 일정 추가 모달 -->
+<div class="modal-overlay" id="addEventModal">
+  <div class="modal">
+    <h3>📅 일정 추가</h3>
+    <input type="text" id="eventTitle" placeholder="일정 제목" style="margin-bottom:8px"
+      onkeydown="if(event.key==='Enter')confirmAddEvent()">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="date" id="eventDate" style="flex:1">
+      <input type="time" id="eventStartTime" style="flex:1" placeholder="시작 시간">
+      <input type="time" id="eventEndTime" style="flex:1" placeholder="종료 시간">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('addEventModal')">취소</button>
+      <button class="btn btn-primary" onclick="confirmAddEvent()">현재 문서에 추가</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="wikimind.js?v=6"></script>
 </body>
 </html>
