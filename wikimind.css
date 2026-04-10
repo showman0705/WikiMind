@@ -708,7 +708,8 @@ aside {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .sidebar-top {
   padding: 10px 8px 8px;
@@ -763,9 +764,16 @@ aside {
   color: var(--accent);
 }
 .doc-tree {
-  flex: 1;
+  min-height: 60px;
+  max-height: 280px;
   overflow-y: auto;
   padding: 0 6px 12px;
+}
+/* 왼쪽 사이드바 미니 캘린더 */
+.sidebar-cal {
+  border-top: 1px solid var(--border);
+  padding-bottom: 12px;
+  flex-shrink: 0;
 }
 .folder-item {
   margin-bottom: 2px;
@@ -854,6 +862,27 @@ aside {
 .doc-item:hover .doc-delete {
   display: block;
 }
+.doc-drag-handle {
+  font-size: 12px;
+  color: var(--text3);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+.doc-item:hover .doc-drag-handle {
+  opacity: 0.6;
+}
+.doc-item.dragging {
+  opacity: 0.4;
+  background: var(--bg3);
+}
+.doc-item.drag-over {
+  border-top: 2px solid var(--accent);
+  background: var(--accent-dim2);
+}
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -876,6 +905,31 @@ aside {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-dim2);
+}
+
+/* ── RESIZE HANDLE ── */
+.resize-handle {
+  width: 5px;
+  background: transparent;
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.2s;
+  z-index: 10;
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  width: 3px;
+  background: transparent;
+  transition: background 0.2s;
+}
+.resize-handle:hover::after,
+.resize-handle.resizing::after {
+  background: var(--accent);
 }
 
 /* ── EDITOR AREA ── */
@@ -1086,7 +1140,7 @@ aside {
   margin-top: 1px;
 }
 
-/* NOTION-STYLE EDITOR */
+/* BLOCK EDITOR */
 .editor-main {
   flex: 1;
   display: flex;
@@ -1095,53 +1149,65 @@ aside {
   position: relative;
 }
 
-/* 렌더링 뷰 (기본 표시) */
-.notion-view {
+/* 블록 에디터 컨테이너 */
+.notion-blocks {
   flex: 1;
   overflow-y: auto;
   padding: 32px 48px;
-  cursor: text;
   font-family: "Noto Sans KR", sans-serif;
   font-size: 14px;
   line-height: 1.85;
   color: var(--text2);
 }
-.notion-view:empty::before {
-  content: "클릭하여 편집...";
-  color: var(--text3);
+
+/* 개별 블록 */
+.nb {
+  min-height: 1.6em;
+  padding: 1px 0;
+  cursor: text;
+  border-radius: 3px;
+}
+.nb:hover {
+  background: rgba(255,255,255,0.015);
+}
+[data-theme="light"] .nb:hover {
+  background: rgba(0,0,0,0.02);
 }
 
-/* 편집 textarea (클릭 시 표시) */
-.notion-textarea {
-  display: none;
-  flex: 1;
-  width: 100%;
-  background: none;
+/* 블록 편집 textarea */
+.nb.editing {
+  background: transparent;
   border: none;
   outline: none;
-  resize: none;
-  color: var(--text);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 13.5px;
-  line-height: 1.8;
-  padding: 32px 48px;
-  caret-color: var(--accent);
 }
-.notion-textarea:empty::before {
-  content: attr(data-placeholder);
-  color: var(--text3);
-  white-space: pre-wrap;
-}
-.editor-main.editing .notion-view {
-  display: none;
-}
-.editor-main.editing .notion-textarea {
+.nb-ta {
   display: block;
-  flex: 1;
+  width: 100%;
+  background-color: var(--bg);
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 14px;
+  line-height: 1.85;
+  resize: none;
+  padding: 2px 4px;
+  margin: 0;
+  min-height: 1.6em;
+  box-sizing: border-box;
+  caret-color: var(--accent);
+  border-radius: 3px;
+}
+.nb-placeholder {
+  color: var(--text3);
+  font-style: italic;
+  font-size: 14px;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* 뷰 typography */
-.notion-view h1 {
+.notion-blocks h1 {
   font-family: "Noto Serif KR", serif;
   font-size: 26px;
   font-weight: 700;
@@ -1151,7 +1217,7 @@ aside {
   border-bottom: 1px solid var(--border);
   letter-spacing: -0.5px;
 }
-.notion-view h2 {
+.notion-blocks h2 {
   font-family: "Noto Serif KR", serif;
   font-size: 19px;
   font-weight: 600;
@@ -1160,38 +1226,38 @@ aside {
   padding-left: 10px;
   border-left: 3px solid var(--accent);
 }
-.notion-view h3 {
+.notion-blocks h3 {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
   margin: 18px 0 8px;
 }
-.notion-view p {
+.notion-blocks p {
   font-size: 14px;
   line-height: 1.85;
   color: var(--text2);
   margin-bottom: 12px;
 }
-.notion-view strong {
+.notion-blocks strong {
   color: var(--text);
   font-weight: 600;
 }
-.notion-view em {
+.notion-blocks em {
   color: var(--accent);
   font-style: italic;
 }
-.notion-view ul,
-.notion-view ol {
+.notion-blocks ul,
+.notion-blocks ol {
   padding-left: 20px;
   margin-bottom: 12px;
 }
-.notion-view li {
+.notion-blocks li {
   font-size: 14px;
   line-height: 1.8;
   color: var(--text2);
   margin-bottom: 3px;
 }
-.notion-view code {
+.notion-blocks code {
   font-family: "JetBrains Mono", monospace;
   font-size: 12px;
   background: var(--bg3);
@@ -1200,7 +1266,7 @@ aside {
   border-radius: 3px;
   color: var(--accent);
 }
-.notion-view pre {
+.notion-blocks pre {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1208,7 +1274,7 @@ aside {
   overflow: hidden;
   position: relative;
 }
-.notion-view pre code {
+.notion-blocks pre code {
   background: none;
   border: none;
   padding: 16px;
@@ -1219,7 +1285,7 @@ aside {
   overflow-x: auto;
   border-radius: 0;
 }
-.notion-view blockquote {
+.notion-blocks blockquote {
   border-left: 3px solid var(--accent);
   background: var(--accent-dim2);
   padding: 10px 16px;
@@ -1229,12 +1295,12 @@ aside {
   font-style: italic;
   font-size: 14px;
 }
-.notion-view hr {
+.notion-blocks hr {
   border: none;
   border-top: 1px solid var(--border);
   margin: 20px 0;
 }
-.notion-view a {
+.notion-blocks a {
   color: var(--accent);
   text-decoration: none;
   border-bottom: 1px solid rgba(201, 169, 110, 0.3);
@@ -1244,13 +1310,13 @@ aside {
   border-bottom-color: rgba(106, 154, 184, 0.3) !important;
   cursor: pointer;
 }
-.notion-view table {
+.notion-blocks table {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 16px;
   font-size: 13px;
 }
-.notion-view th {
+.notion-blocks th {
   background: var(--bg3);
   border: 1px solid var(--border);
   padding: 8px 12px;
@@ -1258,18 +1324,150 @@ aside {
   color: var(--text);
   font-weight: 600;
 }
-.notion-view td {
+.notion-blocks td {
   border: 1px solid var(--border);
   padding: 7px 12px;
   color: var(--text2);
 }
-.notion-view img {
+.notion-blocks img {
   max-width: 100%;
   border-radius: 6px;
   margin: 8px 0;
   border: 1px solid var(--border);
 }
-.notion-view .file-embed {
+/* 파일 카드 */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  max-width: 480px;
+}
+.file-card-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.file-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.file-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-card-type {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.file-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.file-card-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+.file-card-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.file-card-btn.dl {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* 문서 내 이미지 */
+.doc-image {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  display: block;
+}
+/* 파일 미리보기 모달 */
+.file-preview-modal {
+  width: 80vw;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.file-preview-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.file-preview-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.file-preview-body img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.file-preview-body iframe {
+  width: 100%;
+  height: 60vh;
+  border: none;
+  border-radius: 6px;
+}
+.file-preview-nopreview {
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+  padding: 32px;
+}
+.file-preview-nopreview .no-preview-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+/* 일정 추가 모달 date/time inputs */
+#addEventModal input[type="date"],
+#addEventModal input[type="time"] {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 13px;
+  outline: none;
+  colorscheme: dark;
+}
+[data-theme="light"] #addEventModal input[type="date"],
+[data-theme="light"] #addEventModal input[type="time"] {
+  color-scheme: light;
+}
+.notion-blocks .file-embed {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1281,11 +1479,11 @@ aside {
   font-size: 13px;
   color: var(--text2);
 }
-.notion-view .file-embed a {
+.notion-blocks .file-embed a {
   color: var(--accent);
   border: none;
 }
-.notion-view .doc-schedule {
+.notion-blocks .doc-schedule {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1442,6 +1640,144 @@ aside {
   margin-top: 4px;
 }
 
+/* ── SCHEDULE MODAL ── */
+.schedule-modal {
+  width: 460px;
+  max-width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.schedule-modal-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  font-family: "Noto Serif KR", serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.schedule-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 20px;
+  min-height: 60px;
+  max-height: 320px;
+}
+.schedule-empty {
+  text-align: center;
+  padding: 28px 0;
+  font-size: 13px;
+  color: var(--text3);
+}
+.schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 8px;
+  animation: slideIn 0.15s ease;
+}
+.schedule-item.native {
+  border-left-color: var(--green);
+}
+.schedule-item-left {
+  flex: 1;
+  min-width: 0;
+}
+.schedule-item-time {
+  font-size: 11px;
+  color: var(--text3);
+  margin-bottom: 3px;
+}
+.schedule-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  word-break: break-word;
+}
+.schedule-item-src {
+  font-size: 10px;
+  color: var(--accent);
+  opacity: 0.7;
+  margin-top: 3px;
+}
+.schedule-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.schedule-delete-btn:hover {
+  color: var(--red);
+  background: rgba(196, 122, 90, 0.12);
+}
+.schedule-add-form {
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+  flex-shrink: 0;
+  background: var(--bg2);
+}
+.schedule-add-form input[type="text"] {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.schedule-add-form input[type="text"]:focus {
+  border-color: var(--accent);
+}
+.schedule-add-form input[type="time"] {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 12px;
+  outline: none;
+  color-scheme: dark;
+  transition: border-color 0.2s;
+}
+.schedule-add-form input[type="time"]:focus {
+  border-color: var(--accent);
+}
+[data-theme="light"] .schedule-add-form input[type="time"] {
+  color-scheme: light;
+}
+/* sidebar mini-cal events section compact */
+.mc-events-section {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.mc-events-title {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  letter-spacing: 0.3px;
+}
+
 /* ── RIGHT SIDEBAR (CALENDAR) ── */
 .right-sidebar {
   width: 320px;
@@ -1590,51 +1926,7 @@ aside {
   background: var(--green);
 }
 
-/* Events Section */
-.mc-events-section {
-  flex: 1;
-  border-top: 1px solid var(--border);
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.mc-events-title {
-  padding: 12px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border);
-}
-.mc-events-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 16px;
-}
-.mc-event-item {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 10px;
-  background: var(--bg3);
-  border-left: 2px solid var(--accent);
-  border-radius: 6px;
-  margin-bottom: 8px;
-  font-size: 12px;
-}
-.mc-event-item.native {
-  border-left-color: var(--green);
-}
-.mc-event-time {
-  font-size: 10px;
-  color: var(--text3);
-  margin-bottom: 3px;
-}
-.mc-event-lbl {
-  color: var(--text);
-  font-weight: 500;
-}
+/* Events Section — replaced by schedule modal, styles now defined above */
 
 /* Responsive adjustments */
 @media (max-width: 960px) {

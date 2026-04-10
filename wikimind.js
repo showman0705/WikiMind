@@ -390,7 +390,7 @@ function startSync(uid) {
       SAMPLE_DOCS.forEach((d) => pushDoc(d));
       state.docs = [...SAMPLE_DOCS];
     } else {
-      state.docs = snap.docs.map((d) => {
+      state.docs = applyDocOrder(snap.docs.map((d) => {
         const data = d.data();
         return {
           id: d.id,
@@ -402,7 +402,7 @@ function startSync(uid) {
             data.updatedAt?.toDate?.()?.toISOString() ??
             new Date().toISOString(),
         };
-      });
+      }));
     }
     renderAll();
     updateMiniCalendarData();
@@ -531,11 +531,79 @@ function renderTree() {
 
 function docItemHTML(d) {
   const active = d.id == state.activeDocId ? "active" : "";
-  return `<div class="doc-item ${active}" onclick="openDoc('${d.id}')">
+  return `<div class="doc-item ${active}" onclick="openDoc('${d.id}')"
+    draggable="true"
+    data-doc-id="${d.id}"
+    ondragstart="dragStartDoc(event,'${d.id}')"
+    ondragover="dragOverDoc(event)"
+    ondrop="dropDoc(event,'${d.id}')"
+    ondragend="dragEndDoc(event)">
+    <span class="doc-drag-handle" title="드래그하여 이동">⠿</span>
     <span class="doc-icon">📄</span>
     <span class="doc-name">${escHtml(d.title)}</span>
     <button class="doc-delete" onclick="deleteDocById(event,'${d.id}')">✕</button>
   </div>`;
+}
+
+// ─── 문서 드래그앤드롭 재정렬 ───
+let _dragDocId = null;
+
+window.dragStartDoc = function (e, id) {
+  _dragDocId = id;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", id);
+  setTimeout(() => { const el = e.target; if (el) el.classList.add("dragging"); }, 0);
+};
+
+window.dragOverDoc = function (e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  // 드롭 위치 하이라이트
+  document.querySelectorAll(".doc-item.drag-over").forEach(el => el.classList.remove("drag-over"));
+  e.currentTarget.classList.add("drag-over");
+};
+
+window.dragEndDoc = function (e) {
+  e.target.classList.remove("dragging");
+  document.querySelectorAll(".doc-item.drag-over").forEach(el => el.classList.remove("drag-over"));
+  _dragDocId = null;
+};
+
+window.dropDoc = function (e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove("drag-over");
+  if (!_dragDocId || _dragDocId == targetId) return;
+  const fromIdx = state.docs.findIndex(d => d.id == _dragDocId);
+  const toIdx   = state.docs.findIndex(d => d.id == targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = state.docs.splice(fromIdx, 1);
+  state.docs.splice(toIdx, 0, moved);
+  saveDocOrder();
+  _dragDocId = null;
+  renderAll();
+};
+
+// ─── 문서 순서 저장/복원 (localStorage) ───
+function saveDocOrder() {
+  localStorage.setItem("wm-doc-order", JSON.stringify(state.docs.map(d => d.id)));
+}
+
+function applyDocOrder(docs) {
+  const saved = localStorage.getItem("wm-doc-order");
+  if (!saved) return docs;
+  try {
+    const ids = JSON.parse(saved);
+    const result = [];
+    ids.forEach(id => {
+      const d = docs.find(x => x.id == id);
+      if (d) result.push(d);
+    });
+    // New docs not in saved order go to front
+    docs.forEach(d => {
+      if (!result.find(x => x.id == d.id)) result.unshift(d);
+    });
+    return result;
+  } catch { return docs; }
 }
 
 function renderTags() {
@@ -698,76 +766,237 @@ window.closeModal = function (id) {
 };
 
 // ════════════════════════════════════════════
-//  NOTION-STYLE VIEW/EDIT
+//  BLOCK EDITOR
 // ════════════════════════════════════════════
-function renderNotionEditor(md) {
-  $("notionEditor").value = md;
-  refreshView(md);
-  switchToView();
-}
-
-function refreshView(md) {
-  const viewEl = $("notionView");
-  viewEl.innerHTML = parseMarkdown(md);
-  viewEl.querySelectorAll("pre").forEach((pre) => {
-    const code = pre.querySelector("code");
-    if (!code) return;
-    const btn = document.createElement("button");
-    btn.className = "copy-btn";
-    btn.textContent = "복사";
-    btn.onclick = () => {
-      navigator.clipboard.writeText(code.innerText).then(() => {
-        btn.textContent = "✓ 복사됨";
-        btn.classList.add("copied");
-        setTimeout(() => { btn.textContent = "복사"; btn.classList.remove("copied"); }, 2000);
-      });
-    };
-    pre.appendChild(btn);
-  });
-}
-
-window.switchToEdit = function() {
-  $("editorMain").classList.add("editing");
-  const ta = $("notionEditor");
-  ta.focus();
-  ta.setSelectionRange(ta.value.length, ta.value.length);
+const blockEditor = {
+  blocks: [],   // [{id, md}]
+  activeId: null,
 };
 
-window.switchToView = function() {
-  const d = state.docs.find((x) => x.id == state.activeDocId);
-  if (d) refreshView(d.content);
-  $("editorMain").classList.remove("editing");
+function splitMdToBlocks(md) {
+  if (!md || !md.trim()) return [{ id: 1, md: "" }];
+  const result = [];
+  let current = "";
+  let inFence = false;
+  let id = 1;
+
+  for (const line of md.split("\n")) {
+    if (/^(`{3}|~{3})/.test(line)) {
+      inFence = !inFence;
+      current += (current ? "\n" : "") + line;
+      if (!inFence) {
+        result.push({ id: id++, md: current });
+        current = "";
+      }
+      continue;
+    }
+    if (inFence) { current += "\n" + line; continue; }
+
+    if (line === "") {
+      if (current.trim()) { result.push({ id: id++, md: current }); current = ""; }
+    } else {
+      current += (current ? "\n" : "") + line;
+    }
+  }
+  if (current.trim()) result.push({ id: id++, md: current });
+  return result.length ? result : [{ id: 1, md: "" }];
+}
+
+function renderNotionEditor(md) {
+  blockEditor.blocks = splitMdToBlocks(md);
+  blockEditor.activeId = null;
+  renderAllBlocks();
+}
+
+function renderAllBlocks() {
+  const container = $("notionBlocks");
+  if (!container) return;
+  container.innerHTML = "";
+  blockEditor.blocks.forEach((block) => container.appendChild(createBlockEl(block)));
+}
+
+function addCopyBtn(pre) {
+  if (pre.querySelector(".copy-btn")) return;
+  const code = pre.querySelector("code");
+  if (!code) return;
+  const btn = document.createElement("button");
+  btn.className = "copy-btn";
+  btn.textContent = "복사";
+  btn.onclick = () => {
+    navigator.clipboard.writeText(code.innerText).then(() => {
+      btn.textContent = "✓ 복사됨";
+      btn.classList.add("copied");
+      setTimeout(() => { btn.textContent = "복사"; btn.classList.remove("copied"); }, 2000);
+    });
+  };
+  pre.appendChild(btn);
+}
+
+function renderBlockContent(div, block) {
+  div.classList.remove("editing");
+  if (block.md.trim()) {
+    div.innerHTML = parseMarkdown(block.md);
+    div.querySelectorAll("pre").forEach(addCopyBtn);
+  } else {
+    div.innerHTML = ""; // 빈 블록은 투명하게
+  }
+}
+
+function createBlockEl(block) {
+  const div = document.createElement("div");
+  div.className = "nb";
+  div.dataset.id = block.id;
+  renderBlockContent(div, block);
+  div.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    focusBlock(block.id);
+  });
+  return div;
+}
+
+function focusBlock(id) {
+  if (blockEditor.activeId === id) return;
+  if (blockEditor.activeId !== null) commitBlock(blockEditor.activeId);
+
+  const block = blockEditor.blocks.find((b) => b.id === id);
+  const div = document.querySelector(`.nb[data-id="${id}"]`);
+  if (!div || !block) return;
+
+  blockEditor.activeId = id;
+  div.classList.add("editing");
+  div.innerHTML = "";
+
+  const ta = document.createElement("textarea");
+  ta.className = "nb-ta";
+  ta.value = block.md;
+  ta.placeholder = "내용을 입력하세요...";
+  ta.rows = Math.max(1, (block.md.match(/\n/g) || []).length + 1);
+
+  ta.addEventListener("input", () => {
+    block.md = ta.value;
+    ta.rows = Math.max(1, (ta.value.match(/\n/g) || []).length + 1);
+    syncContent();
+    handleSlashInput();
+  });
+
+  ta.addEventListener("keydown", handleBlockKeydown);
+
+  ta.addEventListener("blur", () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (active && (active.closest(".toolbar") || active.closest(".slash-menu"))) return;
+      if (blockEditor.activeId === id) {
+        commitBlock(id);
+        blockEditor.activeId = null;
+      }
+    }, 150);
+  });
+
+  div.appendChild(ta);
+  setTimeout(() => {
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+  }, 0);
+}
+
+function handleBlockKeydown(e) {
+  const div = e.target.closest(".nb");
+  if (!div) return;
+  const id = parseInt(div.dataset.id);
+  const block = blockEditor.blocks.find((b) => b.id === id);
+  const ta = e.target;
+  if (!block) return;
+
+  if (e.key === "Enter" && !e.shiftKey) {
+    // Slash menu visible → let global handler pick the slash item
+    if (state.slashVisible) return;
+    const isHeading = /^#{1,6}\s/.test(block.md.split("\n")[0]);
+    const cursorAtEnd = ta.selectionStart === ta.value.length;
+    if (isHeading || cursorAtEnd) {
+      e.preventDefault();
+      commitBlock(id);
+      createBlockAfter(id);
+      return;
+    }
+    // Mid-content Enter adds newline naturally (for lists, etc.)
+  }
+
+  if (e.key === "Backspace" && ta.value === "") {
+    e.preventDefault();
+    const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+    if (idx === 0 && blockEditor.blocks.length === 1) return;
+    blockEditor.blocks.splice(idx, 1);
+    blockEditor.activeId = null;
+    div.remove();
+    const prevBlock = blockEditor.blocks[Math.max(0, idx - 1)];
+    if (prevBlock) focusBlock(prevBlock.id);
+    syncContent();
+    return;
+  }
+
+  if (e.key === "Escape") { commitBlock(id); blockEditor.activeId = null; }
+
+  // Arrow keys: don't intercept when slash menu is open (global handler navigates it)
+  if (state.slashVisible) return;
+
+  if (e.key === "ArrowUp" && ta.selectionStart === 0) {
+    const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+    if (idx > 0) { e.preventDefault(); commitBlock(id); focusBlock(blockEditor.blocks[idx - 1].id); }
+  }
+  if (e.key === "ArrowDown" && ta.selectionEnd === ta.value.length) {
+    const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+    if (idx < blockEditor.blocks.length - 1) { e.preventDefault(); commitBlock(id); focusBlock(blockEditor.blocks[idx + 1].id); }
+  }
+}
+
+function commitBlock(id) {
+  const block = blockEditor.blocks.find((b) => b.id === id);
+  const div = document.querySelector(`.nb[data-id="${id}"]`);
+  if (!div) return;
+  if (block) renderBlockContent(div, block);
+  div.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    focusBlock(id);
+  });
+  if (blockEditor.activeId === id) blockEditor.activeId = null;
+}
+
+function createBlockAfter(id) {
+  const idx = blockEditor.blocks.findIndex((b) => b.id === id);
+  const newBlock = { id: Date.now(), md: "" };
+  blockEditor.blocks.splice(idx + 1, 0, newBlock);
+  const div = document.querySelector(`.nb[data-id="${id}"]`);
+  const newDiv = createBlockEl(newBlock);
+  div.after(newDiv);
+  blockEditor.activeId = null;
+  focusBlock(newBlock.id);
+  syncContent();
+}
+
+function getActiveBlockTa() {
+  if (blockEditor.activeId === null) return null;
+  const div = document.querySelector(`.nb[data-id="${blockEditor.activeId}"]`);
+  return div ? div.querySelector(".nb-ta") : null;
+}
+
+// Stub for backwards-compat (toolbar file upload etc.)
+window.switchToEdit = function () {
+  if (blockEditor.activeId === null && blockEditor.blocks.length) {
+    focusBlock(blockEditor.blocks[blockEditor.blocks.length - 1].id);
+  }
+};
+window.switchToView = function () {
+  if (blockEditor.activeId !== null) { commitBlock(blockEditor.activeId); blockEditor.activeId = null; }
 };
 
 function syncContent() {
   const d = state.docs.find((x) => x.id == state.activeDocId);
   if (!d) return;
-  d.content = $("notionEditor").value;
+  d.content = blockEditor.blocks.map((b) => b.md).join("\n\n");
   d.updatedAt = new Date().toISOString();
   updateStatus();
   schedulePush(d);
 }
-
-// ════════════════════════════════════════════
-//  EDITOR EVENTS
-// ════════════════════════════════════════════
-$("notionEditor").addEventListener("input", () => {
-  syncContent();
-  handleSlashInput();
-});
-
-$("notionEditor").addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { e.preventDefault(); switchToView(); }
-});
-
-$("notionEditor").addEventListener("blur", () => {
-  setTimeout(() => {
-    const active = document.activeElement;
-    if (!active) { switchToView(); return; }
-    if (active.closest && (active.closest(".toolbar") || active.closest(".slash-menu"))) return;
-    switchToView();
-  }, 150);
-});
 
 $("docTitle").addEventListener("input", () => {
   const d = state.docs.find((x) => x.id == state.activeDocId);
@@ -861,17 +1090,38 @@ function parseMarkdown(md) {
     },
   );
 
-  // Images/files (기능 5)
-  md = md.replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, (m) => {
-    const match = m.match(/!\[([^\]]*)\]\((data:[^)]+)\)/);
-    if (!match) return m;
-    return `<img src="${match[2]}" alt="${escHtml(match[1])}" style="max-width:100%;border-radius:6px;margin:8px 0;border:1px solid var(--border)">`;
+  // Images/files — 플레이스홀더로 먼저 추출 (HTML 이스케이프 전에 처리)
+  const embeds = [];
+  // 이미지
+  md = md.replace(/!\[([^\]]*)\]\((data:[^\s)]+|https?:[^\s)]+)\)/g, (_, alt, src) => {
+    const idx = embeds.length;
+    embeds.push(`<img src="${src}" alt="${escHtml(alt)}" class="doc-image">`);
+    return `%%EMBED_${idx}%%`;
   });
-  md = md.replace(
-    /\[📎 ([^\]]+)\]\(([^)]+)\)/g,
-    (_, name, href) =>
-      `<div class="file-embed">📎 <a href="${href}" target="_blank" rel="noopener">${escHtml(name)}</a></div>`,
-  );
+  // 파일 첨부
+  md = md.replace(/\[📎 ([^\]]+)\]\((data:[^\s)]+|[^\s)]+)\)/g, (_, name, href) => {
+    const idx = embeds.length;
+    const storeIdx = (window._wmFiles = window._wmFiles || []).length;
+    window._wmFiles.push({ name, href });
+    const ext = name.split(".").pop().toLowerCase();
+    const icon = { pdf:"📄", doc:"📝", docx:"📝", xls:"📊", xlsx:"📊", ppt:"📋", pptx:"📋",
+      zip:"🗜", rar:"🗜", mp4:"🎬", mp3:"🎵", txt:"📃" }[ext] || "📎";
+    const typeLabel = { pdf:"PDF", doc:"Word", docx:"Word", xls:"Excel", xlsx:"Excel",
+      ppt:"PowerPoint", pptx:"PowerPoint", zip:"ZIP 압축", rar:"RAR 압축",
+      mp4:"동영상", mp3:"오디오", txt:"텍스트" }[ext] || "파일";
+    embeds.push(`<div class="file-card">
+      <div class="file-card-icon">${icon}</div>
+      <div class="file-card-info">
+        <div class="file-card-name">${escHtml(name)}</div>
+        <div class="file-card-type">${typeLabel}</div>
+      </div>
+      <div class="file-card-actions">
+        <button class="file-card-btn" onclick="previewFileEmbed(${storeIdx})">미리보기</button>
+        <a class="file-card-btn dl" href="${href}" download="${escHtml(name)}">다운로드</a>
+      </div>
+    </div>`);
+    return `%%EMBED_${idx}%%`;
+  });
 
   md = md
     .replace(/&/g, "&amp;")
@@ -931,13 +1181,41 @@ function parseMarkdown(md) {
     .replace(/\n\n([^<\n].+?)(?=\n\n|$)/gs, (_, p) => `<p>${p}</p>`)
     .replace(/\n/g, "<br>");
 
-  // Restore code blocks (unescape for them)
+  // Restore code blocks
   codeBlocks.forEach((block, i) => {
     md = md.replace(`%%CODE_${i}%%`, block);
+  });
+  // Restore image/file embeds
+  embeds.forEach((html, i) => {
+    md = md.replace(`%%EMBED_${i}%%`, html);
   });
 
   return md;
 }
+
+// 파일 미리보기
+window.previewFileEmbed = function (idx) {
+  const file = (window._wmFiles || [])[idx];
+  if (!file) return;
+  $("previewFileName").textContent = file.name;
+  const dl = $("previewDownloadBtn");
+  dl.href = file.href;
+  dl.download = file.name;
+  const body = $("previewContent");
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (["jpg","jpeg","png","gif","webp","bmp","svg"].includes(ext)) {
+    body.innerHTML = `<img src="${file.href}" alt="${escHtml(file.name)}">`;
+  } else if (ext === "pdf") {
+    body.innerHTML = `<iframe src="${file.href}" title="${escHtml(file.name)}"></iframe>`;
+  } else {
+    body.innerHTML = `<div class="file-preview-nopreview">
+      <span class="no-preview-icon">📁</span>
+      이 파일 형식은 미리보기를 지원하지 않습니다.<br>
+      <span style="font-size:11px;margin-top:6px;display:block">${escHtml(file.name)}</span>
+    </div>`;
+  }
+  $("filePreviewModal").classList.add("visible");
+};
 
 // 기능 2: 위키 링크 — 문서 없으면 자동 생성
 window.jumpOrCreateDoc = function (title) {
@@ -1051,7 +1329,8 @@ const SLASH_COMMANDS = [
 ];
 
 function handleSlashInput() {
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { hideSlashMenu(); return; }
   const val = ta.value;
   const pos = ta.selectionStart;
   const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
@@ -1082,9 +1361,12 @@ function renderSlashMenu(items, ta) {
         <div><div class="slash-item-label">${c.label}</div><div class="slash-item-desc">${c.desc}</div></div>
       </div>`
     ).join("");
+  // Position near the textarea's cursor
   const rect = ta.getBoundingClientRect();
-  menu.style.left = (rect.left + 28) + "px";
-  menu.style.top  = (rect.top + 80) + "px";
+  const lineCount = ta.value.substring(0, ta.selectionStart).split("\n").length;
+  const lineH = parseFloat(getComputedStyle(ta).lineHeight) || 26;
+  menu.style.left = (rect.left + 12) + "px";
+  menu.style.top  = (rect.top + lineCount * lineH + 4) + "px";
   menu.style.display = "block";
   menu.classList.add("visible");
   menu._filtered = items;
@@ -1121,10 +1403,13 @@ window.selectSlashItem = function (idx) {
 };
 
 function executeSlash(cmd) {
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { hideSlashMenu(); return; }
   const pos = ta.selectionStart;
   ta.value = ta.value.slice(0, state.slashStartPos) + ta.value.slice(pos);
   ta.selectionStart = ta.selectionEnd = state.slashStartPos;
+  const block = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (block) block.md = ta.value;
   hideSlashMenu();
   cmd.action();
 }
@@ -1154,49 +1439,72 @@ function handleFileInsert(file) {
   reader.readAsDataURL(file);
 }
 
-// Drag & Drop onto view or editor
+// Drag & Drop onto block editor
 const dropOverlay = document.querySelector(".drop-overlay");
-["notionView", "notionEditor"].forEach((id) => {
-  const el = $(id);
-  if (!el) return;
-  el.addEventListener("dragover", (e) => { e.preventDefault(); dropOverlay.classList.add("active"); });
-  el.addEventListener("dragleave", () => dropOverlay.classList.remove("active"));
-  el.addEventListener("drop", (e) => {
+const notionBlocksEl = $("notionBlocks");
+if (notionBlocksEl) {
+  notionBlocksEl.addEventListener("dragover", (e) => { e.preventDefault(); dropOverlay.classList.add("active"); });
+  notionBlocksEl.addEventListener("dragleave", () => dropOverlay.classList.remove("active"));
+  notionBlocksEl.addEventListener("drop", (e) => {
     e.preventDefault(); dropOverlay.classList.remove("active");
     const file = e.dataTransfer.files[0];
     if (file) handleFileInsert(file);
   });
-});
+}
 
 // ════════════════════════════════════════════
 //  TOOLBAR HELPERS (textarea)
 // ════════════════════════════════════════════
 function insertAtCursor(text) {
-  switchToEdit();
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) {
+    // No block active — focus last block then insert
+    const last = blockEditor.blocks[blockEditor.blocks.length - 1];
+    if (last) {
+      focusBlock(last.id);
+      setTimeout(() => {
+        const ta2 = getActiveBlockTa();
+        if (!ta2) return;
+        const s = ta2.selectionStart;
+        ta2.value = ta2.value.slice(0, s) + text + ta2.value.slice(ta2.selectionEnd);
+        ta2.selectionStart = ta2.selectionEnd = s + text.length;
+        const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+        if (blk) blk.md = ta2.value;
+        ta2.dispatchEvent(new Event("input"));
+      }, 60);
+    }
+    return;
+  }
   const s = ta.selectionStart;
   ta.value = ta.value.slice(0, s) + text + ta.value.slice(ta.selectionEnd);
   ta.selectionStart = ta.selectionEnd = s + text.length;
+  const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (blk) blk.md = ta.value;
+  ta.rows = Math.max(1, (ta.value.match(/\n/g) || []).length + 1);
   ta.dispatchEvent(new Event("input"));
   ta.focus();
 }
 
 window.insertMd = function (before, after) {
-  switchToEdit();
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { switchToEdit(); return; }
   const s = ta.selectionStart, e = ta.selectionEnd;
   const sel = ta.value.slice(s, e) || "텍스트";
   ta.setRangeText(before + sel + after, s, e, "select");
+  const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (blk) blk.md = ta.value;
   ta.dispatchEvent(new Event("input"));
   ta.focus();
 };
 
 function insertLine(prefix) {
-  switchToEdit();
-  const ta = $("notionEditor");
+  const ta = getActiveBlockTa();
+  if (!ta) { switchToEdit(); return; }
   const s = ta.selectionStart;
   const ls = ta.value.lastIndexOf("\n", s - 1) + 1;
   ta.setRangeText(prefix, ls, ls, "end");
+  const blk = blockEditor.blocks.find((b) => b.id === blockEditor.activeId);
+  if (blk) blk.md = ta.value;
   ta.dispatchEvent(new Event("input"));
   ta.focus();
 }
@@ -1270,7 +1578,7 @@ searchInput.addEventListener("input", () => {
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".search-wrap"))
     searchResults.classList.remove("visible");
-  if (!e.target.closest(".slash-menu") && !e.target.closest("#notionEditor"))
+  if (!e.target.closest(".slash-menu") && !e.target.closest(".nb-ta"))
     hideSlashMenu();
 });
 
@@ -1309,20 +1617,14 @@ window.toggleLeftSidebar = function () {
 };
 
 // ════════════════════════════════════════════
-//  MINI CALENDAR (우측 사이드바)
+//  MINI CALENDAR (왼쪽 사이드바 하단)
 // ════════════════════════════════════════════
 window.toggleRightSidebar = function () {
   state.rightSidebarOpen = !state.rightSidebarOpen;
-  const sb = $("rightSidebar");
+  const sb = $("sidebarCal");
   if (!sb) return;
-  if (state.rightSidebarOpen) {
-    sb.classList.add("open");
-    sb.classList.remove("collapsed");
-    renderMiniCalendar();
-  } else {
-    sb.classList.remove("open");
-    sb.classList.add("collapsed");
-  }
+  sb.style.display = state.rightSidebarOpen ? "block" : "none";
+  if (state.rightSidebarOpen) renderMiniCalendar();
 };
 
 window.navMiniCal = function (dir) {
@@ -1340,6 +1642,12 @@ window.navMiniCal = function (dir) {
 window.selectMiniCalDate = function (dStr) {
   state.selectedDate = dStr;
   renderMiniCalendar();
+  openScheduleModal(dStr);
+};
+
+// 일정 추가 모달 열기 (레거시 — 일정 관리 모달로 위임)
+window.openAddEventModal = function (dStr) {
+  openScheduleModal(dStr);
 };
 
 window.updateMiniCalendarData = function () {
@@ -1362,8 +1670,30 @@ window.updateMiniCalendarData = function () {
     }
   });
   state.combinedEvents = [...state.nativeEvents, ...docEvents];
-  if (state.rightSidebarOpen && $("rightSidebar")) {
-    renderMiniCalendar();
+  if (state.rightSidebarOpen) renderMiniCalendar();
+  // If schedule modal is open, refresh the list
+  const sm = $("scheduleModal");
+  if (sm && sm.classList.contains("visible")) renderScheduleList(state.selectedDate);
+};
+
+// 일정 추가 확인
+window.confirmAddEvent = function () {
+  const title = $("eventTitle").value.trim();
+  const date = $("eventDate").value;
+  if (!title || !date) return;
+  const st = $("eventStartTime").value;
+  const et = $("eventEndTime").value;
+  const id = Math.random().toString(36).substr(2, 8);
+  let line = `📅[${id}] ${date}`;
+  if (st) line += ` ${st}`;
+  if (st && et) line += ` ~ ${et}`;
+  line += ` ${title}`;
+  closeModal("addEventModal");
+  // 현재 문서에 삽입
+  if (state.activeDocId) {
+    insertAtCursor("\n" + line + "\n");
+  } else {
+    showToast("문서를 먼저 선택해주세요");
   }
 };
 
@@ -1411,7 +1741,7 @@ window.renderMiniCalendar = function () {
           `</div>`
         : "";
 
-    html += `<div class="${cls}" onclick="selectMiniCalDate('${dStr}')">${i}${dotsHtml}</div>`;
+    html += `<div class="${cls}" onclick="openScheduleModal('${dStr}')" title="클릭: 일정 보기/추가">${i}${dotsHtml}</div>`;
   }
 
   // fill remaining
@@ -1428,29 +1758,137 @@ window.renderMiniCalendar = function () {
 
 window.renderMiniEvents = function () {
   const tEl = $("mcEventsTitle");
-  const lEl = $("mcEventsList");
-  if (!tEl || !lEl) return;
+  if (!tEl) return;
+  const spanEl = tEl.querySelector("span");
+  if (!spanEl) return;
+  const evCount = state.combinedEvents.filter(ev => ev.sd === state.selectedDate).length;
+  const parts = state.selectedDate ? state.selectedDate.split("-") : [];
+  const label = parts.length === 3
+    ? `${parseInt(parts[1])}월 ${parseInt(parts[2])}일 일정 ${evCount > 0 ? `(${evCount})` : ""}`
+    : "오늘의 일정";
+  spanEl.textContent = label;
+};
 
-  tEl.textContent = `${state.selectedDate} 일정`;
-  const evs = state.combinedEvents.filter((ev) => ev.sd === state.selectedDate);
+// ════════════════════════════════════════════
+//  SCHEDULE MODAL (일정 관리 화면)
+// ════════════════════════════════════════════
+window.openScheduleModal = function (dStr) {
+  const date = dStr || state.selectedDate || (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
+  state.selectedDate = date;
+  renderMiniCalendar();
+
+  const parts = date.split("-");
+  const formatted = parts.length === 3
+    ? `${parts[0]}년 ${parseInt(parts[1])}월 ${parseInt(parts[2])}일`
+    : date;
+  $("scheduleDateTitle").textContent = `📅 ${formatted} 일정`;
+  $("scheduleNewTitle").value = "";
+  $("scheduleNewStart").value = "";
+  $("scheduleNewEnd").value = "";
+
+  renderScheduleList(date);
+  $("scheduleModal").classList.add("visible");
+  setTimeout(() => $("scheduleNewTitle").focus(), 80);
+};
+
+function renderScheduleList(dStr) {
+  const evs = state.combinedEvents.filter(ev => ev.sd === dStr);
+  const list = $("scheduleList");
+  if (!list) return;
+
   if (evs.length === 0) {
-    lEl.innerHTML = `<div style="padding:10px 0;font-size:12px;color:var(--text3);text-align:center;">일정이 없습니다.</div>`;
+    list.innerHTML = `<div class="schedule-empty">이 날의 일정이 없습니다.</div>`;
     return;
   }
 
-  lEl.innerHTML = evs
-    .map((ev) => {
-      let timeStr = "";
-      if (ev.st) timeStr += ev.st;
-      if (ev.ed || ev.et)
-        timeStr +=
-          " ~ " + (ev.ed && ev.ed !== ev.sd ? ev.ed + " " : "") + ev.et;
-      return `
-      <div class="mc-event-item ${!ev.isDocEvent ? "native" : ""}">
-        ${timeStr ? `<div class="mc-event-time">${timeStr}</div>` : ""}
-        <div class="mc-event-lbl">${escHtml(ev.title)}</div>
+  list.innerHTML = evs.map(ev => {
+    let timeStr = "";
+    if (ev.st) timeStr = ev.st;
+    if (ev.et) timeStr += ` ~ ${ev.et}`;
+    return `<div class="schedule-item ${!ev.isDocEvent ? "native" : ""}">
+      <div class="schedule-item-left">
+        ${timeStr ? `<div class="schedule-item-time">${timeStr}</div>` : ""}
+        <div class="schedule-item-title">${escHtml(ev.title)}</div>
+        ${ev.isDocEvent ? `<div class="schedule-item-src">📄 문서에서</div>` : ""}
       </div>
-    `;
-    })
-    .join("");
+      ${!ev.isDocEvent ? `<button class="schedule-delete-btn" onclick="deleteScheduleEvent('${ev.id}')">✕</button>` : ""}
+    </div>`;
+  }).join("");
+}
+
+window.saveScheduleEvent = function () {
+  const title = $("scheduleNewTitle").value.trim();
+  const date = state.selectedDate;
+  if (!title || !date) return;
+  const st = $("scheduleNewStart").value;
+  const et = $("scheduleNewEnd").value;
+  const id = Math.random().toString(36).substr(2, 8);
+  state.nativeEvents.push({ id, sd: date, st, et, ed: "", title });
+  saveNativeEvents();
+  updateMiniCalendarData();
+  renderScheduleList(date);
+  $("scheduleNewTitle").value = "";
+  $("scheduleNewStart").value = "";
+  $("scheduleNewEnd").value = "";
+  $("scheduleNewTitle").focus();
 };
+
+window.deleteScheduleEvent = function (id) {
+  state.nativeEvents = state.nativeEvents.filter(ev => ev.id !== id);
+  saveNativeEvents();
+  updateMiniCalendarData();
+  renderScheduleList(state.selectedDate);
+};
+
+async function saveNativeEvents() {
+  if (!state.currentUser) return;
+  await setDoc(
+    doc(db, "users", state.currentUser.uid, "events", "calv4"),
+    { data: JSON.stringify(state.nativeEvents) },
+    { merge: true }
+  );
+}
+
+// ════════════════════════════════════════════
+//  RESIZE HANDLE (사이드바 크기 조절)
+// ════════════════════════════════════════════
+(function initResizeHandle() {
+  const handle = $("sidebarResize");
+  if (!handle) return;
+
+  // Restore saved width
+  const savedW = localStorage.getItem("wm-sidebar-w");
+  if (savedW) document.documentElement.style.setProperty("--sidebar-w", `${savedW}px`);
+
+  let isResizing = false, startX = 0, startW = 0;
+
+  handle.addEventListener("mousedown", (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    const aside = document.querySelector("aside");
+    startW = aside ? aside.getBoundingClientRect().width : 260;
+    handle.classList.add("resizing");
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isResizing) return;
+    const newW = Math.max(160, Math.min(500, startW + (e.clientX - startX)));
+    document.documentElement.style.setProperty("--sidebar-w", `${newW}px`);
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!isResizing) return;
+    isResizing = false;
+    handle.classList.remove("resizing");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    const aside = document.querySelector("aside");
+    if (aside) localStorage.setItem("wm-sidebar-w", String(Math.round(aside.getBoundingClientRect().width)));
+  });
+})();
