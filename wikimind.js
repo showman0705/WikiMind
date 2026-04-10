@@ -390,7 +390,7 @@ function startSync(uid) {
       SAMPLE_DOCS.forEach((d) => pushDoc(d));
       state.docs = [...SAMPLE_DOCS];
     } else {
-      state.docs = snap.docs.map((d) => {
+      state.docs = applyDocOrder(snap.docs.map((d) => {
         const data = d.data();
         return {
           id: d.id,
@@ -402,7 +402,7 @@ function startSync(uid) {
             data.updatedAt?.toDate?.()?.toISOString() ??
             new Date().toISOString(),
         };
-      });
+      }));
     }
     renderAll();
     updateMiniCalendarData();
@@ -578,9 +578,33 @@ window.dropDoc = function (e, targetId) {
   if (fromIdx < 0 || toIdx < 0) return;
   const [moved] = state.docs.splice(fromIdx, 1);
   state.docs.splice(toIdx, 0, moved);
+  saveDocOrder();
   _dragDocId = null;
   renderAll();
 };
+
+// ─── 문서 순서 저장/복원 (localStorage) ───
+function saveDocOrder() {
+  localStorage.setItem("wm-doc-order", JSON.stringify(state.docs.map(d => d.id)));
+}
+
+function applyDocOrder(docs) {
+  const saved = localStorage.getItem("wm-doc-order");
+  if (!saved) return docs;
+  try {
+    const ids = JSON.parse(saved);
+    const result = [];
+    ids.forEach(id => {
+      const d = docs.find(x => x.id == id);
+      if (d) result.push(d);
+    });
+    // New docs not in saved order go to front
+    docs.forEach(d => {
+      if (!result.find(x => x.id == d.id)) result.unshift(d);
+    });
+    return result;
+  } catch { return docs; }
+}
 
 function renderTags() {
   const all = [...new Set(state.docs.flatMap((d) => d.tags))];
@@ -1618,16 +1642,12 @@ window.navMiniCal = function (dir) {
 window.selectMiniCalDate = function (dStr) {
   state.selectedDate = dStr;
   renderMiniCalendar();
+  openScheduleModal(dStr);
 };
 
-// 일정 추가 모달 열기 (캘린더 + 버튼 또는 날짜 더블클릭)
+// 일정 추가 모달 열기 (레거시 — 일정 관리 모달로 위임)
 window.openAddEventModal = function (dStr) {
-  $("eventDate").value = dStr || state.selectedDate || "";
-  $("eventStartTime").value = "";
-  $("eventEndTime").value = "";
-  $("eventTitle").value = "";
-  $("addEventModal").classList.add("visible");
-  setTimeout(() => $("eventTitle").focus(), 80);
+  openScheduleModal(dStr);
 };
 
 window.updateMiniCalendarData = function () {
@@ -1651,6 +1671,9 @@ window.updateMiniCalendarData = function () {
   });
   state.combinedEvents = [...state.nativeEvents, ...docEvents];
   if (state.rightSidebarOpen) renderMiniCalendar();
+  // If schedule modal is open, refresh the list
+  const sm = $("scheduleModal");
+  if (sm && sm.classList.contains("visible")) renderScheduleList(state.selectedDate);
 };
 
 // 일정 추가 확인
@@ -1718,7 +1741,7 @@ window.renderMiniCalendar = function () {
           `</div>`
         : "";
 
-    html += `<div class="${cls}" onclick="selectMiniCalDate('${dStr}')" ondblclick="openAddEventModal('${dStr}')" title="더블클릭: 일정 추가">${i}${dotsHtml}</div>`;
+    html += `<div class="${cls}" onclick="openScheduleModal('${dStr}')" title="클릭: 일정 보기/추가">${i}${dotsHtml}</div>`;
   }
 
   // fill remaining
@@ -1735,29 +1758,137 @@ window.renderMiniCalendar = function () {
 
 window.renderMiniEvents = function () {
   const tEl = $("mcEventsTitle");
-  const lEl = $("mcEventsList");
-  if (!tEl || !lEl) return;
+  if (!tEl) return;
+  const spanEl = tEl.querySelector("span");
+  if (!spanEl) return;
+  const evCount = state.combinedEvents.filter(ev => ev.sd === state.selectedDate).length;
+  const parts = state.selectedDate ? state.selectedDate.split("-") : [];
+  const label = parts.length === 3
+    ? `${parseInt(parts[1])}월 ${parseInt(parts[2])}일 일정 ${evCount > 0 ? `(${evCount})` : ""}`
+    : "오늘의 일정";
+  spanEl.textContent = label;
+};
 
-  tEl.textContent = `${state.selectedDate} 일정`;
-  const evs = state.combinedEvents.filter((ev) => ev.sd === state.selectedDate);
+// ════════════════════════════════════════════
+//  SCHEDULE MODAL (일정 관리 화면)
+// ════════════════════════════════════════════
+window.openScheduleModal = function (dStr) {
+  const date = dStr || state.selectedDate || (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
+  state.selectedDate = date;
+  renderMiniCalendar();
+
+  const parts = date.split("-");
+  const formatted = parts.length === 3
+    ? `${parts[0]}년 ${parseInt(parts[1])}월 ${parseInt(parts[2])}일`
+    : date;
+  $("scheduleDateTitle").textContent = `📅 ${formatted} 일정`;
+  $("scheduleNewTitle").value = "";
+  $("scheduleNewStart").value = "";
+  $("scheduleNewEnd").value = "";
+
+  renderScheduleList(date);
+  $("scheduleModal").classList.add("visible");
+  setTimeout(() => $("scheduleNewTitle").focus(), 80);
+};
+
+function renderScheduleList(dStr) {
+  const evs = state.combinedEvents.filter(ev => ev.sd === dStr);
+  const list = $("scheduleList");
+  if (!list) return;
+
   if (evs.length === 0) {
-    lEl.innerHTML = `<div style="padding:10px 0;font-size:12px;color:var(--text3);text-align:center;">일정이 없습니다.</div>`;
+    list.innerHTML = `<div class="schedule-empty">이 날의 일정이 없습니다.</div>`;
     return;
   }
 
-  lEl.innerHTML = evs
-    .map((ev) => {
-      let timeStr = "";
-      if (ev.st) timeStr += ev.st;
-      if (ev.ed || ev.et)
-        timeStr +=
-          " ~ " + (ev.ed && ev.ed !== ev.sd ? ev.ed + " " : "") + ev.et;
-      return `
-      <div class="mc-event-item ${!ev.isDocEvent ? "native" : ""}">
-        ${timeStr ? `<div class="mc-event-time">${timeStr}</div>` : ""}
-        <div class="mc-event-lbl">${escHtml(ev.title)}</div>
+  list.innerHTML = evs.map(ev => {
+    let timeStr = "";
+    if (ev.st) timeStr = ev.st;
+    if (ev.et) timeStr += ` ~ ${ev.et}`;
+    return `<div class="schedule-item ${!ev.isDocEvent ? "native" : ""}">
+      <div class="schedule-item-left">
+        ${timeStr ? `<div class="schedule-item-time">${timeStr}</div>` : ""}
+        <div class="schedule-item-title">${escHtml(ev.title)}</div>
+        ${ev.isDocEvent ? `<div class="schedule-item-src">📄 문서에서</div>` : ""}
       </div>
-    `;
-    })
-    .join("");
+      ${!ev.isDocEvent ? `<button class="schedule-delete-btn" onclick="deleteScheduleEvent('${ev.id}')">✕</button>` : ""}
+    </div>`;
+  }).join("");
+}
+
+window.saveScheduleEvent = function () {
+  const title = $("scheduleNewTitle").value.trim();
+  const date = state.selectedDate;
+  if (!title || !date) return;
+  const st = $("scheduleNewStart").value;
+  const et = $("scheduleNewEnd").value;
+  const id = Math.random().toString(36).substr(2, 8);
+  state.nativeEvents.push({ id, sd: date, st, et, ed: "", title });
+  saveNativeEvents();
+  updateMiniCalendarData();
+  renderScheduleList(date);
+  $("scheduleNewTitle").value = "";
+  $("scheduleNewStart").value = "";
+  $("scheduleNewEnd").value = "";
+  $("scheduleNewTitle").focus();
 };
+
+window.deleteScheduleEvent = function (id) {
+  state.nativeEvents = state.nativeEvents.filter(ev => ev.id !== id);
+  saveNativeEvents();
+  updateMiniCalendarData();
+  renderScheduleList(state.selectedDate);
+};
+
+async function saveNativeEvents() {
+  if (!state.currentUser) return;
+  await setDoc(
+    doc(db, "users", state.currentUser.uid, "events", "calv4"),
+    { data: JSON.stringify(state.nativeEvents) },
+    { merge: true }
+  );
+}
+
+// ════════════════════════════════════════════
+//  RESIZE HANDLE (사이드바 크기 조절)
+// ════════════════════════════════════════════
+(function initResizeHandle() {
+  const handle = $("sidebarResize");
+  if (!handle) return;
+
+  // Restore saved width
+  const savedW = localStorage.getItem("wm-sidebar-w");
+  if (savedW) document.documentElement.style.setProperty("--sidebar-w", `${savedW}px`);
+
+  let isResizing = false, startX = 0, startW = 0;
+
+  handle.addEventListener("mousedown", (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    const aside = document.querySelector("aside");
+    startW = aside ? aside.getBoundingClientRect().width : 260;
+    handle.classList.add("resizing");
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isResizing) return;
+    const newW = Math.max(160, Math.min(500, startW + (e.clientX - startX)));
+    document.documentElement.style.setProperty("--sidebar-w", `${newW}px`);
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!isResizing) return;
+    isResizing = false;
+    handle.classList.remove("resizing");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    const aside = document.querySelector("aside");
+    if (aside) localStorage.setItem("wm-sidebar-w", String(Math.round(aside.getBoundingClientRect().width)));
+  });
+})();

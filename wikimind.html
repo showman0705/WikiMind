@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WikiMind — 개인 지식 베이스</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="wikimind.css?v=7">
+<link rel="stylesheet" href="wikimind.css?v=8">
 </head>
 <body>
 
@@ -119,9 +119,6 @@
         <button class="sidebar-section-btn" onclick="openNewFolderModal()" title="새 폴더 추가">＋</button>
       </div>
       <div class="doc-tree" id="docTree"></div>
-      <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
-        <span>태그</span>
-      </div>
       <!-- 미니 캘린더 (왼쪽 사이드바) -->
       <div class="sidebar-cal" id="sidebarCal">
         <div class="sidebar-section" style="border-top:1px solid var(--border);padding-top:10px">
@@ -140,10 +137,7 @@
         <div class="mc-events-section">
           <div class="mc-events-title" id="mcEventsTitle" style="display:flex;align-items:center;justify-content:space-between">
             <span>오늘의 일정</span>
-            <button class="sidebar-section-btn" onclick="openAddEventModal()" title="일정 추가" style="font-size:16px">＋</button>
-          </div>
-          <div class="mc-events-list" id="mcEventsList">
-            <div style="padding:8px 0;font-size:11px;color:var(--text3);text-align:center;">일정이 없습니다.</div>
+            <button class="sidebar-section-btn" onclick="openScheduleModal()" title="일정 보기/추가" style="font-size:16px">＋</button>
           </div>
         </div>
       </div>
@@ -154,6 +148,8 @@
       </div>
       <div class="tag-list" id="tagList"></div>
     </aside>
+
+    <div class="resize-handle" id="sidebarResize"></div>
 
     <div class="editor-area" id="editorArea">
       <div class="empty-state" id="emptyState">
@@ -275,6 +271,29 @@
   </div>
 </div>
 
-<script type="module" src="wikimind.js?v=7"></script>
+<!-- 일정 관리 모달 -->
+<div class="modal-overlay" id="scheduleModal">
+  <div class="modal schedule-modal">
+    <div class="schedule-modal-hdr">
+      <span id="scheduleDateTitle">📅 일정</span>
+      <button class="btn" style="padding:2px 8px;font-size:13px" onclick="closeModal('scheduleModal')">✕</button>
+    </div>
+    <div class="schedule-list" id="scheduleList"></div>
+    <div class="schedule-add-form">
+      <input type="text" id="scheduleNewTitle" placeholder="새 일정 제목 입력 후 Enter"
+        onkeydown="if(event.key==='Enter')saveScheduleEvent()">
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="time" id="scheduleNewStart" style="flex:1">
+        <input type="time" id="scheduleNewEnd" style="flex:1">
+      </div>
+      <div class="modal-actions" style="margin-top:12px">
+        <button class="btn" onclick="closeModal('scheduleModal')">닫기</button>
+        <button class="btn btn-primary" onclick="saveScheduleEvent()">일정 추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="wikimind.js?v=8"></script>
 </body>
 </html>
