@@ -1868,6 +1868,8 @@ async function saveNativeEvents() {
   let isResizing = false, startX = 0, startW = 0;
 
   handle.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".sidebar-toggle-btn")) return; // 토글 버튼은 리사이즈 제외
+    if (handle.classList.contains("sidebar-collapsed")) return;
     isResizing = true;
     startX = e.clientX;
     const aside = document.querySelector("aside");
@@ -1893,4 +1895,38 @@ async function saveNativeEvents() {
     const aside = document.querySelector("aside");
     if (aside) localStorage.setItem("wm-sidebar-w", String(Math.round(aside.getBoundingClientRect().width)));
   });
+})();
+
+// ════════════════════════════════════════════
+//  SIDEBAR TOGGLE
+// ════════════════════════════════════════════
+window.toggleSidebar = function () {
+  const aside = document.querySelector("aside");
+  const handle = $("sidebarResize");
+  const btn = $("sidebarToggleBtn");
+  if (!aside || !handle || !btn) return;
+
+  const collapsed = aside.classList.toggle("collapsed");
+  handle.classList.toggle("sidebar-collapsed", collapsed);
+  btn.classList.toggle("sidebar-collapsed", collapsed);
+  // ‹ 닫기, › 열기
+  btn.innerHTML = collapsed ? "&#8250;" : "&#8249;";
+  btn.title = collapsed ? "사이드바 펼치기" : "사이드바 접기";
+  localStorage.setItem("wm-sidebar-collapsed", collapsed ? "1" : "0");
+};
+
+// 초기 상태 복원
+(function () {
+  if (localStorage.getItem("wm-sidebar-collapsed") === "1") {
+    const aside = document.querySelector("aside");
+    const handle = $("sidebarResize");
+    const btn = $("sidebarToggleBtn");
+    if (aside) aside.classList.add("collapsed");
+    if (handle) handle.classList.add("sidebar-collapsed");
+    if (btn) {
+      btn.classList.add("sidebar-collapsed");
+      btn.innerHTML = "&#8250;";
+      btn.title = "사이드바 펼치기";
+    }
+  }
 })();
