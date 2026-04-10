@@ -552,28 +552,30 @@ window.dragStartDoc = function (e, id) {
   _dragDocId = id;
   e.dataTransfer.effectAllowed = "move";
   e.dataTransfer.setData("text/plain", id);
-  setTimeout(() => { const el = e.target; if (el) el.classList.add("dragging"); }, 0);
+  e.currentTarget.classList.add("dragging");
 };
 
 window.dragOverDoc = function (e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = "move";
-  // 드롭 위치 하이라이트
   document.querySelectorAll(".doc-item.drag-over").forEach(el => el.classList.remove("drag-over"));
   e.currentTarget.classList.add("drag-over");
 };
 
 window.dragEndDoc = function (e) {
-  e.target.classList.remove("dragging");
+  document.querySelectorAll(".doc-item.dragging").forEach(el => el.classList.remove("dragging"));
   document.querySelectorAll(".doc-item.drag-over").forEach(el => el.classList.remove("drag-over"));
-  _dragDocId = null;
+  // dragend가 drop보다 먼저 실행되는 경우를 대비해 지연 초기화
+  setTimeout(() => { _dragDocId = null; }, 100);
 };
 
 window.dropDoc = function (e, targetId) {
   e.preventDefault();
   e.currentTarget.classList.remove("drag-over");
-  if (!_dragDocId || _dragDocId == targetId) return;
-  const fromIdx = state.docs.findIndex(d => d.id == _dragDocId);
+  // _dragDocId가 dragEnd로 인해 이미 null인 경우 dataTransfer에서 복구
+  const dragId = _dragDocId || e.dataTransfer.getData("text/plain");
+  if (!dragId || dragId == targetId) return;
+  const fromIdx = state.docs.findIndex(d => d.id == dragId);
   const toIdx   = state.docs.findIndex(d => d.id == targetId);
   if (fromIdx < 0 || toIdx < 0) return;
   const [moved] = state.docs.splice(fromIdx, 1);
