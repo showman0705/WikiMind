@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WikiMind — 개인 지식 베이스</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="wikimind.css?v=10">
+<link rel="stylesheet" href="wikimind.css?v=11">
 </head>
 <body>
 
@@ -100,10 +100,23 @@
     </div>
 
     <div class="header-actions">
-      <button class="btn" style="padding:4px 8px;font-size:14px;margin-right:4px;"
-        id="hdrBtn-calendar" onclick="toggleRightSidebar()" title="달력 켜기/끄기">📅</button>
+      <!-- 뷰 토글 pill -->
+      <div class="view-pill" id="viewPill">
+        <button class="view-pill-btn active" id="vpWiki" onclick="setMainView('wiki')" title="문서">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+            <rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/>
+            <rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+          </svg>
+        </button>
+        <button class="view-pill-btn" id="vpTodo" onclick="setMainView('todo')" title="할 일 목록">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <polyline points="4.5,8 7,10.5 11.5,5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
       <button class="btn" onclick="exportDoc()">내보내기</button>
-      <button class="btn btn-primary" onclick="openNewDocModal()">+ 새 문서</button>
+      <button class="btn btn-primary" id="newItemBtn" onclick="openNewDocModal()">+ 새 문서</button>
       <div id="userMenuWrap"></div>
     </div>
   </header>
@@ -151,6 +164,26 @@
 
     <div class="resize-handle" id="sidebarResize">
       <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 접기/펼치기">&#8250;</button>
+    </div>
+
+    <!-- 투두 리스트 패널 -->
+    <div class="todo-area" id="todoArea">
+      <div class="todo-top">
+        <h2 class="todo-title">할 일 목록</h2>
+        <div class="todo-filters">
+          <button class="todo-filter active" id="tf-all"    onclick="filterTodos('all')">전체</button>
+          <button class="todo-filter"        id="tf-active" onclick="filterTodos('active')">미완료</button>
+          <button class="todo-filter"        id="tf-done"   onclick="filterTodos('done')">완료</button>
+        </div>
+      </div>
+      <div class="todo-add-wrap">
+        <div class="todo-add-inner">
+          <span class="todo-add-icon">+</span>
+          <input type="text" id="todoInput" class="todo-input" placeholder="새 할 일 추가 후 Enter"
+            onkeydown="if(event.key==='Enter')addTodo()">
+        </div>
+      </div>
+      <div class="todo-list" id="todoList"></div>
     </div>
 
     <div class="editor-area" id="editorArea">
@@ -296,6 +329,6 @@
   </div>
 </div>
 
-<script type="module" src="wikimind.js?v=10"></script>
+<script type="module" src="wikimind.js?v=11"></script>
 </body>
 </html>

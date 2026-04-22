@@ -24,7 +24,9 @@ import {
   collection,
   doc,
   setDoc,
+  addDoc,
   deleteDoc,
+  updateDoc,
   onSnapshot,
   query,
   orderBy,
@@ -76,6 +78,10 @@ const state = {
   nativeEvents: [],
   combinedEvents: [],
   calv4Unsub: null,
+  todos: [],
+  todosUnsub: null,
+  todoFilter: "all",
+  mainView: "wiki",
 };
 
 const SAMPLE_DOCS = [
@@ -410,6 +416,15 @@ function startSync(uid) {
     updateStatus();
   });
 
+  // Todos listener
+  state.todosUnsub = onSnapshot(
+    query(collection(db, "users", uid, "todos"), orderBy("createdAt", "asc")),
+    (snap) => {
+      state.todos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTodoList();
+    }
+  );
+
   state.calv4Unsub = onSnapshot(
     doc(db, "users", uid, "events", "calv4"),
     (snap) => {
@@ -428,14 +443,9 @@ function startSync(uid) {
 }
 
 function stopSync() {
-  if (state.firestoreUnsub) {
-    state.firestoreUnsub();
-    state.firestoreUnsub = null;
-  }
-  if (state.calv4Unsub) {
-    state.calv4Unsub();
-    state.calv4Unsub = null;
-  }
+  if (state.firestoreUnsub) { state.firestoreUnsub(); state.firestoreUnsub = null; }
+  if (state.calv4Unsub)     { state.calv4Unsub();     state.calv4Unsub = null; }
+  if (state.todosUnsub)     { state.todosUnsub();      state.todosUnsub = null; }
 }
 
 async function pushDoc(docData) {
@@ -1930,3 +1940,83 @@ window.toggleSidebar = function () {
     }
   }
 })();
+
+// ════════════════════════════════════════════
+//  VIEW TOGGLE (wiki ↔ todo)
+// ════════════════════════════════════════════
+window.setMainView = function (view) {
+  state.mainView = view;
+  const wiki = view === "wiki";
+  $("editorArea").style.display  = wiki ? "flex" : "none";
+  $("todoArea").style.display    = wiki ? "none"  : "flex";
+  $("todoArea").classList.toggle("visible", !wiki);
+  $("vpWiki").classList.toggle("active", wiki);
+  $("vpTodo").classList.toggle("active", !wiki);
+  $("newItemBtn").textContent = wiki ? "+ 새 문서" : "+ 할 일 추가";
+  $("newItemBtn").onclick = wiki ? openNewDocModal : addTodoFocus;
+  if (!wiki) renderTodoList();
+};
+
+function addTodoFocus() {
+  $("todoInput").focus();
+}
+
+// ════════════════════════════════════════════
+//  TODO CRUD
+// ════════════════════════════════════════════
+window.addTodo = async function () {
+  const input = $("todoInput");
+  const text = input.value.trim();
+  if (!text || !state.currentUser) return;
+  input.value = "";
+  await addDoc(
+    collection(db, "users", state.currentUser.uid, "todos"),
+    { text, done: false, createdAt: serverTimestamp() }
+  );
+};
+
+window.toggleTodo = async function (id, done) {
+  if (!state.currentUser) return;
+  await updateDoc(
+    doc(db, "users", state.currentUser.uid, "todos", id),
+    { done: !done }
+  );
+};
+
+window.deleteTodo = async function (id) {
+  if (!state.currentUser) return;
+  await deleteDoc(doc(db, "users", state.currentUser.uid, "todos", id));
+};
+
+window.filterTodos = function (filter) {
+  state.todoFilter = filter;
+  ["all", "active", "done"].forEach(f => {
+    $(`tf-${f}`).classList.toggle("active", f === filter);
+  });
+  renderTodoList();
+};
+
+function renderTodoList() {
+  const list = $("todoList");
+  if (!list) return;
+
+  let todos = state.todos;
+  if (state.todoFilter === "active") todos = todos.filter(t => !t.done);
+  if (state.todoFilter === "done")   todos = todos.filter(t => t.done);
+
+  if (todos.length === 0) {
+    const msgs = { all: "할 일이 없어요!", active: "미완료 항목이 없어요!", done: "완료된 항목이 없어요!" };
+    list.innerHTML = `<div class="todo-empty"><div class="todo-empty-icon">${state.todoFilter === "done" ? "🎉" : "✅"}</div>${msgs[state.todoFilter]}</div>`;
+    return;
+  }
+
+  list.innerHTML = todos.map(t => `
+    <div class="todo-item ${t.done ? "done" : ""}" data-id="${t.id}">
+      <div class="todo-checkbox" onclick="toggleTodo('${t.id}',${t.done})" title="완료 토글">
+        ${t.done ? "✓" : ""}
+      </div>
+      <span class="todo-text" onclick="toggleTodo('${t.id}',${t.done})">${escHtml(t.text)}</span>
+      <button class="todo-del-btn" onclick="deleteTodo('${t.id}')" title="삭제">✕</button>
+    </div>
+  `).join("");
+}
